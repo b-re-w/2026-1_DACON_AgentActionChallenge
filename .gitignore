@@ -192,3 +192,6 @@ trainer_output/
 # AI Agent
 .claude
 .omc
+
+# DACON 배포 데이터 아카이브 (AgentActionDataset.download() 산출물)
+open.zip

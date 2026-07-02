@@ -12,7 +12,8 @@ sys.path 최상단에 둔 채 `import datasets` 하면 이 로컬 패키지가 �
     from transformers import AutoTokenizer, DataCollatorWithPadding
     from datasets import load_records, assign_folds, build_fold_datasets
 
-    records = load_records("data/train.jsonl", "data/train_labels.csv")
+    ds = AgentActionDataset(root=".", split="train", download=True)  # 없으면 자동 다운로드
+    records = ds.samples                                   # list[ActionSample]
     fold = assign_folds(records, n_splits=5, seed=42)      # StratifiedGroupKFold
 
     tok = AutoTokenizer.from_pretrained("microsoft/mdeberta-v3-base")
@@ -23,7 +24,7 @@ sys.path 최상단에 둔 채 `import datasets` 하면 이 로컬 패키지가 �
 
 from __future__ import annotations
 
-from .dataset import ActionDataset, build_fold_datasets
+from .action_dataset import ActionDataset, AgentActionDataset, build_fold_datasets
 from .io import ActionSample, load_jsonl, load_labels, load_records
 from .schema import (
     ACTION_CLASSES,
@@ -51,5 +52,5 @@ __all__ = [
     # splits
     "assign_folds", "train_val_indices", "verify_no_leakage", "save_folds", "load_folds",
     # dataset
-    "ActionDataset", "build_fold_datasets",
+    "AgentActionDataset", "ActionDataset", "build_fold_datasets",
 ]
