@@ -1,0 +1,36 @@
+[project]
+name = "agent-action"
+version = "0.1.0"
+description = "Agent Action Challenge"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "torch",
+    "pandas==2.0.3",
+    "numpy==1.26.4",
+    "scipy==1.15.3",
+    "scikit-learn==1.8.0",
+    "joblib==1.5.3",
+    "threadpoolctl==3.6.0",
+    "narwhals==2.21.2",
+    "transformers==4.46.3",
+    "accelerate==1.9.0",
+    "tqdm==4.66.4",
+    #"sentencepiece==0.1.99",
+    #"regex==2023.12.25",
+    #"loguru==0.7.2",
+    #"pyyaml==6.0.1",
+    #"rich==13.7.1"
+]
+[project.optional-dependencies]
+dev = [
+    "playwright>=1.49",
+]
+
+[tool.uv.sources]
+torch = [ { index = "torch-cu128" } ]
+
+[[tool.uv.index]]
+name = "torch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
