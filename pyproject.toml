@@ -23,12 +23,14 @@ dependencies = [
     #"rich==13.7.1"
 ]
 [project.optional-dependencies]
-dev = [
-    "playwright>=1.49",
+# 로컬 제출 도구 (제출 zip 에는 포함되지 않음). DACON 공식 코드제출 API.
+submit = [
+    "dacon-submit-api",
 ]
 
 [tool.uv.sources]
 torch = [ { index = "torch-cu128" } ]
+dacon-submit-api = { url = "https://cfiles.dacon.co.kr/competitions/api/dacon_submit_api-0.1.2-py3-none-any.whl" }
 
 [[tool.uv.index]]
 name = "torch-cu128"
