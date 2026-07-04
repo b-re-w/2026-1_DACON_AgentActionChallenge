@@ -93,3 +93,23 @@
 - **sentencepiece 미설치**(로컬): mDeBERTa/XLM-R 토크나이저에 필요.
 - **제출 제약**: 1GB / 추론 10분 / 설치 10분 / 오프라인. 사전학습 가중치는 zip에 동봉.
 - 로컬: torch 2.7.0+cu128, transformers 4.57.3, accelerate 1.9.0, sklearn 1.6.1.
+
+---
+
+## 6. 실험 로그 규칙 (에이전트 지침 — 상세는 `LOGGING.md`)
+
+모든 실험 에이전트는 **실험이 끝나면 반드시** 결과를 기록한다.
+
+- **상세 기록**: `docs/exp_logs/<컨셉>/<YYYY-MM-DD>.md` — 컨셉별 폴더 · 날짜별 파일(형식 `YYYY-MM-DD` 통일), 같은 날은 시각 섹션으로 이어붙임.
+- **요약 인덱스**: `docs/exp_logs/LOG.md` — 실험마다 한 줄(날짜·컨셉·타이틀·핵심 수치·링크).
+- **손으로 쓰지 말고 헬퍼 호출**: `ai_challenge.utils.experiment_log.log_experiment(concept, title, metrics, notes)`.
+
+**컨셉별 로그 폴더 (각 컨셉 폴더 따로 존재)**:
+| 폴더 | 컨셉 |
+|------|------|
+| `docs/exp_logs/encoder_team/` | 접근 A · Encoder-based |
+| `docs/exp_logs/decoder_team/` | 접근 B · Decoder-based SLM |
+| `docs/exp_logs/speculative_team/` | 접근 C · Speculative/MatFormer |
+| `docs/exp_logs/others/` | 기타(데이터·검증·앙상블·전처리) |
+
+원칙: 실패 실험도 기록 · LB 점수는 설정과 함께 기록 · 포맷은 `log_experiment` 로 통일.
