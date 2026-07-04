@@ -18,7 +18,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 LOGS_DIR = _ROOT / "docs" / "exp_logs"
 INDEX = LOGS_DIR / "LOG.md"
 
-# 컨셉 슬러그 → 설명 (IDEA.md 의 접근과 대응). 각 컨셉은 별도 로그 폴더를 가진다.
+# 컨셉 슬러그 → 설명 (PROJECT.md 의 접근과 대응). 각 컨셉은 별도 로그 폴더를 가진다.
 CONCEPTS: dict[str, str] = {
     "encoder_team": "접근 A · Encoder-based (mDeBERTa/XLM-R)",
     "decoder_team": "접근 B · Decoder-based SLM (Qwen3 등)",

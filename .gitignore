@@ -189,7 +189,6 @@ results-*/
 wandb/
 logs/
 trainer_output/
-submit_*.zip
 
 # AI Agent
 .claude

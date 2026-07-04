@@ -1,16 +1,13 @@
 """OOF logits 기반 per-class bias(threshold) 튜닝 — Macro-F1 직접 최적화.
 
-argmax(logits + bias) 의 bias 를 coordinate ascent 로 최적화한다. Macro-F1 은
-클래스 균등 가중이라, 희소 클래스의 결정 경계를 살짝 낮추면(bias↑) 크게 오른다.
-재학습이 필요 없다.
+argmax(logits + bias) 의 bias 를 coordinate ascent 로 최적화한다. 재학습 불필요.
+과적합 점검: OOF(val fold)를 tune/check 로 나눠 일반화를 확인한다.
+공통 로직은 ``ai_challenge.models.common`` (OOF logits = predict_logits).
 
-과적합 점검: OOF(val fold)를 tune/check 로 나눠 tune 에서 최적화한 bias 를
-check 에서 평가한다(일반화 확인). 최종 bias 는 전체 OOF 로 다시 적합해 저장한다.
-
-산출물: <model-dir>/bias.json  (submit_script.py 가 있으면 로드해 logits 에 더함)
+산출물: <model-dir>/bias.json
 
 사용:
-    uv run python -m ai_challenge.tune_threshold --model-dir runs/B/model --val-fold 0
+    uv run python -m ai_challenge.method.tune_threshold --model-dir runs/B/model --val-fold 0
 """
 
 from __future__ import annotations
@@ -20,45 +17,19 @@ import json
 from pathlib import Path
 
 import numpy as np
-import torch
 from sklearn.metrics import f1_score
 
-from ai_challenge.datasets import (
-    ACTION_CLASSES,
-    CLASS_TO_ID,
-    NUM_CLASSES,
-    load_folds,
-    load_records,
-)
-
-DATA_DIR = Path("data")
+from ai_challenge.datasets import ACTION_CLASSES, CLASS_TO_ID, NUM_CLASSES
+from ai_challenge.models.common import get_folds, load_train_records, predict_logits
 
 
-def compute_oof_logits(model_dir: str, val_fold: int, max_length: int, batch_size: int = 128):
-    """저장된 모델로 val fold 의 logits 와 정답을 계산한다(길이정렬 배칭)."""
-    from transformers import AutoModelForSequenceClassification, AutoTokenizer
-
-    from ai_challenge.datasets import serialize_sample
-
-    records = load_records(DATA_DIR / "train.jsonl", DATA_DIR / "train_labels.csv")
-    fold = load_folds(DATA_DIR / "folds.csv", records)
+def compute_oof_logits(model_dir, val_fold, max_length):
+    """저장된 모델로 val fold 의 logits 와 정답을 계산한다."""
+    records = load_train_records()
+    fold = get_folds(records)
     val = [s for s, f in zip(records, fold) if f == val_fold]
-
-    tok = AutoTokenizer.from_pretrained(model_dir)
-    model = AutoModelForSequenceClassification.from_pretrained(model_dir).cuda().half().eval()
-
-    texts = [serialize_sample(s) for s in val]
+    logits = predict_logits(model_dir, val, max_length=max_length)
     y = np.array([CLASS_TO_ID[s.action] for s in val])
-    order = sorted(range(len(texts)), key=lambda i: len(texts[i]))
-    logits = np.zeros((len(texts), NUM_CLASSES), dtype=np.float32)
-    with torch.inference_mode():
-        for st in range(0, len(order), batch_size):
-            chunk = order[st:st + batch_size]
-            enc = tok([texts[i] for i in chunk], truncation=True, max_length=max_length,
-                      padding=True, return_tensors="pt").to("cuda")
-            out = model(**enc).logits.float().cpu().numpy()
-            for pos, i in enumerate(chunk):
-                logits[i] = out[pos]
     return logits, y
 
 
@@ -106,7 +77,7 @@ def main() -> None:
     idx = rng.permutation(len(y))
     cut = int(len(y) * 0.7)
     ti, ci = idx[:cut], idx[cut:]
-    bias_t, f1_tune = coordinate_ascent(logits[ti], y[ti])
+    bias_t, _ = coordinate_ascent(logits[ti], y[ti])
     f1_check_base = macro_f1(logits[ci], y[ci], np.zeros(NUM_CLASSES))
     f1_check_tuned = macro_f1(logits[ci], y[ci], bias_t)
     print(f"[generalization] check-split: base={f1_check_base:.4f} → tuned={f1_check_tuned:.4f} "
@@ -115,7 +86,6 @@ def main() -> None:
     # 최종 bias: 전체 OOF 로 적합
     bias_full, f1_full = coordinate_ascent(logits, y)
     print(f"[final] full-OOF macro_f1: {base_f1:.4f} → {f1_full:.4f} (Δ{f1_full - base_f1:+.4f})")
-    print("[bias]", dict(zip(ACTION_CLASSES, np.round(bias_full, 3).tolist())))
 
     out = Path(args.model_dir) / "bias.json"
     out.write_text(json.dumps({"bias": bias_full.tolist(), "classes": ACTION_CLASSES}), encoding="utf-8")
