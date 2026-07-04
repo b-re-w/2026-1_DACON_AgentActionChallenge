@@ -36,7 +36,7 @@ from transformers import (
     TrainingArguments,
 )
 
-from datasets import (
+from ai_challenge.datasets import (
     ACTION_CLASSES,
     CLASS_TO_ID,
     ID_TO_CLASS,

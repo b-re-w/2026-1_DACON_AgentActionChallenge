@@ -18,7 +18,7 @@ import time
 import zipfile
 from pathlib import Path
 
-from datasets import ACTION_CLASSES
+from ai_challenge.datasets import ACTION_CLASSES
 
 DATA_DIR = Path("data")
 

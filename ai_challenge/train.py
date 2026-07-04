@@ -33,7 +33,7 @@ from transformers import (
     TrainingArguments,
 )
 
-from datasets import (
+from ai_challenge.datasets import (
     ACTION_CLASSES,
     CLASS_TO_ID,
     ID_TO_CLASS,
@@ -126,7 +126,7 @@ def main() -> None:
     tok.add_special_tokens({"additional_special_tokens": SPECIAL_TOKENS})
 
     if args.all_data:
-        from datasets import ActionDataset
+        from ai_challenge.datasets import ActionDataset
 
         train_ds = ActionDataset(records, tok, max_length=args.max_length)
         val_ds = None

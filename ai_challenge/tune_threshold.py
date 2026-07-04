@@ -23,7 +23,7 @@ import numpy as np
 import torch
 from sklearn.metrics import f1_score
 
-from datasets import (
+from ai_challenge.datasets import (
     ACTION_CLASSES,
     CLASS_TO_ID,
     NUM_CLASSES,
@@ -38,7 +38,7 @@ def compute_oof_logits(model_dir: str, val_fold: int, max_length: int, batch_siz
     """저장된 모델로 val fold 의 logits 와 정답을 계산한다(길이정렬 배칭)."""
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-    from datasets import serialize_sample
+    from ai_challenge.datasets import serialize_sample
 
     records = load_records(DATA_DIR / "train.jsonl", DATA_DIR / "train_labels.csv")
     fold = load_folds(DATA_DIR / "folds.csv", records)

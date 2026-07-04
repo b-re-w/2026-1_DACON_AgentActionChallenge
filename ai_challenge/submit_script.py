@@ -1,7 +1,7 @@
 """[제출용 추론 코드] AutoModelForSequenceClassification 14-way 분류.
 
 평가 서버가 zip 을 풀고 이 파일을 `script.py` 로 실행한다. 오프라인·저장소 패키지
-없음 → **완전 self-contained**. 직렬화는 datasets/serialize.py 와 동일 로직을
+없음 → **완전 self-contained**. 직렬화는 ai_challenge/datasets/serialize.py 와 동일 로직을
 raw dict 기준으로 재현한다(학습/추론 표현 일치가 정확도에 필수).
 
 I/O 계약:
