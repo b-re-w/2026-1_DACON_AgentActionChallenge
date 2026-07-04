@@ -28,7 +28,7 @@ from .schema import (
     NUM_CLASSES,
     session_id_from_id,
 )
-from .serialize import SPECIAL_TOKENS, serialize_sample
+from .serialize import SERIALIZE_PRESETS, SPECIAL_TOKENS, serialize_sample
 from .splits import (
     assign_folds,
     load_folds,
@@ -43,7 +43,7 @@ __all__ = [
     # io
     "ActionSample", "load_records", "load_jsonl", "load_labels",
     # serialize
-    "serialize_sample", "SPECIAL_TOKENS",
+    "serialize_sample", "SPECIAL_TOKENS", "SERIALIZE_PRESETS",
     # splits
     "assign_folds", "train_val_indices", "verify_no_leakage", "save_folds", "load_folds",
     # dataset

@@ -14,6 +14,7 @@ from pathlib import Path
 
 from transformers import DataCollatorWithPadding
 
+from ai_challenge.datasets import SERIALIZE_PRESETS
 from ai_challenge.models.common import (
     WeightedTrainer,
     build_datasets,
@@ -48,6 +49,8 @@ def main() -> None:
     ap.add_argument("--all-data", action="store_true",
                     help="검증셋 없이 전체 70k 학습(최종 제출용). OOF 미산출.")
     ap.add_argument("--grad-checkpoint", action="store_true")
+    ap.add_argument("--serialize", default="base", choices=list(SERIALIZE_PRESETS),
+                    help="입력 직렬화 프리셋 (입력 신호 실험용)")
     args = ap.parse_args()
 
     out = Path(args.out)
@@ -60,6 +63,7 @@ def main() -> None:
     train_ds, val_ds = build_datasets(
         records, fold, tok, args.max_length,
         val_fold=args.val_fold, all_data=args.all_data,
+        serialize_kwargs=SERIALIZE_PRESETS[args.serialize],
     )
     print(f"[data] train={len(train_ds)} val={len(val_ds) if val_ds else 0}", flush=True)
 

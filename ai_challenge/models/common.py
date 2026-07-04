@@ -88,12 +88,18 @@ def get_folds(records, n_splits: int = 5, seed: int = 42):
     return fold
 
 
-def build_datasets(records, fold, tokenizer, max_length, val_fold=0, all_data=False):
-    """(train_ds, val_ds) 생성. all_data 면 전체로 학습(val 없음)."""
+def build_datasets(records, fold, tokenizer, max_length, val_fold=0, all_data=False,
+                   serialize_kwargs=None):
+    """(train_ds, val_ds) 생성. all_data 면 전체로 학습(val 없음).
+
+    serialize_kwargs: 직렬화 프리셋(입력 신호 실험용). None 이면 기본 표현.
+    """
     if all_data:
-        return ActionDataset(records, tokenizer, max_length=max_length), None
+        return ActionDataset(records, tokenizer, max_length=max_length,
+                             serialize_kwargs=serialize_kwargs), None
     return build_fold_datasets(
-        records, fold, val_fold, tokenizer=tokenizer, max_length=max_length
+        records, fold, val_fold, tokenizer=tokenizer, max_length=max_length,
+        serialize_kwargs=serialize_kwargs,
     )
 
 
@@ -130,9 +136,15 @@ def build_training_args(
     num_workers: int = 4,
     grad_checkpoint: bool = False,
     all_data: bool = False,
+    remove_unused_columns: bool = True,
 ) -> TrainingArguments:
-    """train·distill 공용 TrainingArguments (all_data 면 eval/save 끔)."""
+    """train·distill 공용 TrainingArguments (all_data 면 eval/save 끔).
+
+    distill 은 데이터셋에 teacher_logits 컬럼을 실어 보내므로 remove_unused_columns=False
+    로 호출해야 한다(기본 True 면 collator 전에 제거되어 KeyError).
+    """
     return TrainingArguments(
+        remove_unused_columns=remove_unused_columns,
         output_dir=str(Path(out_dir) / "hf"),
         num_train_epochs=epochs,
         per_device_train_batch_size=batch_size,

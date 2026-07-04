@@ -155,6 +155,7 @@ def main() -> None:
         out, epochs=args.epochs, batch_size=args.batch_size, lr=args.lr,
         grad_accum=args.grad_accum, bf16=args.bf16, num_workers=args.num_workers,
         grad_checkpoint=args.grad_checkpoint, all_data=args.all_data,
+        remove_unused_columns=False,  # teacher_logits 컬럼 보존 (KDCollator 가 사용)
     )
     trainer = KDTrainer(
         model=model, args=targs, train_dataset=train_ds, eval_dataset=val_ds,
