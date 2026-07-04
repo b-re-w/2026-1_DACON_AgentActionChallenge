@@ -128,16 +128,20 @@ class AgentActionDataset(Dataset):
             os.path.isfile(os.path.join(self.data_dir, n)) for n in needed
         )
 
-    def download(self) -> None:
+    def download(self, remove_archive: bool = True) -> None:
         """open.zip 을 내려받아(무결성 검증) ``root`` 에 압축 해제한다.
 
-        이미 데이터가 있으면 아무 것도 하지 않는다(멱등).
+        압축 해제 후 아카이브(open.zip)는 기본으로 삭제한다(디스크 정리).
+        이미 데이터가 있으면 다운로드/해제는 건너뛰되, 남아 있는 아카이브가 있으면 지운다(멱등).
         """
+        archive = os.path.join(self.root, self.filename)
+
         if self._check_exists():
             print("Files already downloaded and verified")
+            if remove_archive and os.path.isfile(archive):
+                os.remove(archive)  # 이전 실행에서 남은 아카이브 정리
             return
         os.makedirs(self.root, exist_ok=True)
-        archive = os.path.join(self.root, self.filename)
 
         if self._check_integrity(archive, self.md5):
             print(f"Using downloaded and verified file: {archive}")
@@ -152,6 +156,9 @@ class AgentActionDataset(Dataset):
         print(f"Extracting {archive} to {self.root}")
         with zipfile.ZipFile(archive) as zf:
             zf.extractall(self.root)
+
+        if remove_archive and os.path.isfile(archive):
+            os.remove(archive)  # 압축 해제 완료 → 아카이브 삭제
 
     @staticmethod
     def _calculate_md5(fpath: str, chunk_size: int = 1024 * 1024) -> str:

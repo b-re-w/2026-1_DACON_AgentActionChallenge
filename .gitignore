@@ -181,6 +181,7 @@ cython_debug/
 .pypirc
 
 # PyTorch
+runs/
 data/
 .data/
 results/
@@ -188,15 +189,11 @@ results-*/
 wandb/
 logs/
 trainer_output/
+submit_*.zip
 
 # AI Agent
 .claude
 .omc
 
-# DACON 배포 데이터 아카이브 (AgentActionDataset.download() 산출물)
-open.zip
-
 # 학습 산출물 / 제출 zip / 로컬평가 임시
-runs/
-submit_*.zip
 .local_eval/
