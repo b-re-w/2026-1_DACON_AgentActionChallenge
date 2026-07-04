@@ -194,6 +194,3 @@ submit_*.zip
 # AI Agent
 .claude
 .omc
-
-# 학습 산출물 / 제출 zip / 로컬평가 임시
-.local_eval/

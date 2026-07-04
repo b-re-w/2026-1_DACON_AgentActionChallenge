@@ -27,7 +27,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--zip", required=True)
     ap.add_argument("--data", default=str(DATA_DIR))
-    ap.add_argument("--workdir", default=".local_eval")
+    ap.add_argument("--workdir", default="build/local_eval")
     args = ap.parse_args()
 
     data = Path(args.data)
