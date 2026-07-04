@@ -13,3 +13,4 @@
 | 2026-07-03 | others | 효과 없던 레버 — threshold / 앙상블 | threshold_heldout=+0.0002, ensemble_heldout=+0.0013 | [로그](others/2026-07-03.md) |
 | 2026-07-05 | others | 데이터 누수 점검 — 테스트는 안전 | train_next_step_leak=100%/83.3%, test_leak=none | [로그](others/2026-07-05.md) |
 | 2026-07-05 | speculative_team | teacher 벤치 — Qwen2.5-1.5B | oof_macro_f1=0.7565 | [로그](speculative_team/2026-07-05.md) |
+| 2026-07-05 | speculative_team | teacher 벤치 — Qwen2.5-3B | oof_macro_f1=0.7737, epochs=2 | [로그](speculative_team/2026-07-05.md) |
