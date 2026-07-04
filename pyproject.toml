@@ -16,16 +16,20 @@ dependencies = [
     "transformers==4.46.3",
     "accelerate==1.9.0",
     "tqdm==4.66.4",
-    #"sentencepiece==0.1.99",
+    "sentencepiece==0.1.99",
     #"regex==2023.12.25",
     #"loguru==0.7.2",
     #"pyyaml==6.0.1",
     #"rich==13.7.1"
 ]
 [project.optional-dependencies]
-# 로컬 제출 도구 (제출 zip 에는 포함되지 않음). DACON 공식 코드제출 API.
-submit = [
+# 로컬 개발/제출 도구 (제출 zip 에는 포함되지 않음).
+#   - dacon-submit-api: DACON 공식 코드제출 API
+#   - protobuf: mDeBERTa(DebertaV2) spm→fast 토크나이저 변환용(로컬 학습 시에만 필요;
+#     제출 model/ 에는 변환된 tokenizer.json 이 저장돼 평가 서버는 protobuf 불필요)
+dev = [
     "dacon-submit-api",
+    "protobuf==3.20.3",
 ]
 
 [tool.uv.sources]

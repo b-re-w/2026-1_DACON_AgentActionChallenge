@@ -34,6 +34,10 @@ ENV_PATH = _ROOT / ".env"
 COMP_ID = 236694
 BASE_API = "https://newapi.dacon.io"
 LIST_URL = f"{BASE_API}/competition/submission_list?page=1&data_type=1&cpt_id={COMP_ID}"
+# 코드제출 전용 목록 (memo·파일명·소요시간 포함). newapi 의 submission_list 는 채점된
+# csv 기준이라 memo/파일명이 비어 오므로, 대시보드가 쓰는 이 엔드포인트를 쓴다.
+# 인증: newapi 는 커스텀 `token` 헤더지만, app.dacon.io 는 `Authorization: Bearer`.
+CODE_LIST_URL = f"https://app.dacon.io/api/v1/code-submission/list?cptId={COMP_ID}"
 # 실제 브라우저와 동일한 완전한 User-Agent (파이썬 클라이언트로 식별되지 않도록).
 DEFAULT_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -91,6 +95,63 @@ def _auth_headers() -> dict:
     }
 
 
+def _app_auth_headers() -> dict:
+    """app.dacon.io(코드제출 API) 요청 헤더: 완전한 UA + `Authorization: Bearer <JWT>`.
+
+    newapi 는 커스텀 `token` 헤더를 쓰지만 app.dacon.io 는 Bearer 를 요구한다
+    (다른 인증 방식은 모두 "로그인이 필요합니다" 400 을 반환).
+    """
+    token = load_env().get("DACON_TOKEN", "")
+    if not token:
+        raise RuntimeError("인증 토큰이 없습니다. `... submission token <JWT>` 로 저장하세요.")
+    return {
+        "User-Agent": DEFAULT_UA,
+        "Accept": "application/json, text/plain, */*",
+        "Origin": "https://dacon.io",
+        "Referer": "https://dacon.io/",
+        "Authorization": f"Bearer {token}",
+    }
+
+
+def _my_user_id() -> int | None:
+    """DACON_TOKEN(JWT) payload 의 `id` = 내 user_id. (공유 팀에서 내 제출 식별용)"""
+    import base64
+
+    token = load_env().get("DACON_TOKEN", "")
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        return json.loads(base64.urlsafe_b64decode(payload)).get("id")
+    except Exception:
+        return None
+
+
+def get_code_submissions() -> list[dict]:
+    """코드제출 목록(memo·file_link·score·status·execution_seconds 포함)을 반환.
+
+    반환 행에는 user_id 가 없으므로, newapi submission_list 의 (sub_id→user_id)
+    매핑을 join 해 `_mine`(내 계정 여부) 필드를 채운다.
+    """
+    req = urllib.request.Request(CODE_LIST_URL, headers=_app_auth_headers())
+    with urllib.request.urlopen(req, timeout=20) as r:
+        data = json.loads(r.read().decode("utf-8", "replace"))
+    rows = data.get("submissionList", []) if isinstance(data, dict) else []
+
+    # sub_id → user_id (newapi 목록에서) 로 내 제출 태깅
+    my_uid = _my_user_id()
+    sub_to_uid: dict = {}
+    try:
+        for r0 in get_my_submissions(1).get("data", []):
+            sub_to_uid[r0.get("sub_id")] = r0.get("user_id")
+    except Exception:
+        pass
+    for row in rows:
+        uid = sub_to_uid.get(row.get("sub_id"))
+        row["_user_id"] = uid
+        row["_mine"] = (my_uid is not None and uid == my_uid)
+    return rows
+
+
 def save_token(token: str) -> None:
     """붙여넣은 JWT 를 .env 에 저장하고 즉시 조회로 검증한다.
 
@@ -121,18 +182,36 @@ def get_my_submissions(page: int = 1) -> dict:
         return json.loads(r.read().decode("utf-8", "replace"))
 
 
-def print_my_submissions(page: int = 1) -> None:
-    data = get_my_submissions(page)
-    rows = data.get("data") if isinstance(data, dict) else data
-    if not isinstance(rows, list) or not rows:
-        print(json.dumps(data, ensure_ascii=False, indent=2)[:1500])
+def print_my_submissions(page: int = 1, mine_only: bool = False) -> None:
+    """코드제출 목록을 memo·파일명·점수·상태·소요시간과 함께 출력.
+
+    공유 팀이므로 내 계정(user_id) 제출은 `*` 로 표시한다(mine_only=True 면 내 것만).
+    """
+    try:
+        rows = get_code_submissions()
+    except Exception as e:
+        print(f"[코드제출 목록 조회 실패: {str(e)[:120]}] → newapi 목록으로 폴백")
+        data = get_my_submissions(page)
+        rows = data.get("data") if isinstance(data, dict) else data
+        for i, r in enumerate(rows or [], 1):
+            print(f"{i:>3}. score={r.get('score')}  time={r.get('c_time')}")
         return
-    for i, r in enumerate(rows, 1):
-        score = r.get("score", "")
-        ctime = r.get("c_time", "")
-        memo = r.get("memo") or r.get("submission_memo") or ""
-        fin = " [FINAL]" if r.get("use_final") in (1, "1", True) else ""
-        print(f"{i:>3}. score={score}  time={ctime}{fin}  memo={memo}")
+
+    rows.sort(key=lambda r: r.get("c_time", ""), reverse=True)
+    for r in rows:
+        if mine_only and not r.get("_mine"):
+            continue
+        mark = "*" if r.get("_mine") else " "
+        status = r.get("status", "")
+        score = r.get("score")
+        score_s = f"{score:.6f}" if isinstance(score, (int, float)) and status == "COMPLETED" else str(status)
+        fin = " [FINAL]" if r.get("final_use") in (1, "1", True) else ""
+        exe = r.get("execution_seconds") or 0
+        fname = r.get("file_link", "")
+        memo = (r.get("memo") or "").replace("(채운) ", "")
+        print(f"{mark} {r.get('c_time','')}  {score_s:>12}  {exe//60}분{exe%60:02d}초  {fname}{fin}")
+        if memo:
+            print(f"    └ {memo}")
 
 
 # --------------------------------------------------------------------------- #
@@ -193,8 +272,9 @@ def main() -> None:
     pt = sub.add_parser("token", help="브라우저 쿠키에서 뽑은 JWT 를 .env 에 저장")
     pt.add_argument("jwt", help="token 쿠키(JWT) 값")
 
-    pl = sub.add_parser("list", help="내 제출기록 조회")
+    pl = sub.add_parser("list", help="제출기록 조회 (memo·파일명·점수·소요시간)")
     pl.add_argument("--page", type=int, default=1)
+    pl.add_argument("--mine", action="store_true", help="내 계정(user_id) 제출만 표시")
 
     ps = sub.add_parser("submit", help="submit.zip 실제 제출(공식 API)")
     ps.add_argument("zip", help="제출할 zip 경로")
@@ -205,7 +285,7 @@ def main() -> None:
     if args.cmd == "token":
         save_token(args.jwt)
     elif args.cmd == "list":
-        print_my_submissions(args.page)
+        print_my_submissions(args.page, mine_only=args.mine)
     elif args.cmd == "submit":
         submit(args.zip, memo=args.memo, confirm=args.yes)
 

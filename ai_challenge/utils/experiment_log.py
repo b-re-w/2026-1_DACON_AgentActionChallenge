@@ -1,9 +1,9 @@
 """실험 로그 유틸 — 실험이 끝나면 결과를 표준 포맷으로 기록한다.
 
 규칙(자세한 지침은 프로젝트 루트 LOGGING.md 참고):
-- **상세 기록**: `docs/logs/<concept>/<YYYY-MM-DD>.md` (컨셉별 폴더 · 날짜별 파일,
+- **상세 기록**: `docs/exp_logs/<concept>/<YYYY-MM-DD>.md` (컨셉별 폴더 · 날짜별 파일,
   같은 날 여러 실험은 시각 섹션으로 이어붙인다)
-- **요약 인덱스**: `docs/logs/LOG.md` 에 한 줄(날짜·컨셉·타이틀·핵심 수치·링크)
+- **요약 인덱스**: `docs/exp_logs/LOG.md` 에 한 줄(날짜·컨셉·타이틀·핵심 수치·링크)
 
 에이전트는 실험이 끝나면 반드시 `log_experiment(...)` 를 호출한다.
 """
@@ -14,7 +14,8 @@ from datetime import datetime
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[2]
-LOGS_DIR = _ROOT / "docs" / "logs"
+# 정식 경로: docs/exp_logs (docs/logs 는 .gitignore 의 `logs/` 에 걸려 추적 불가 → 변경)
+LOGS_DIR = _ROOT / "docs" / "exp_logs"
 INDEX = LOGS_DIR / "LOG.md"
 
 # 컨셉 슬러그 → 설명 (IDEA.md 의 접근과 대응). 각 컨셉은 별도 로그 폴더를 가진다.
@@ -36,7 +37,7 @@ _INDEX_HEADER = """# 실험 로그 인덱스 (LOG.md)
 
 
 def init_log_dirs() -> None:
-    """docs/logs 스켈레톤(컨셉 폴더 + LOG.md)을 생성(멱등)."""
+    """docs/exp_logs 스켈레톤(컨셉 폴더 + LOG.md)을 생성(멱등)."""
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     for slug in CONCEPTS:
         d = LOGS_DIR / slug
@@ -104,4 +105,4 @@ def log_experiment(
 
 if __name__ == "__main__":
     init_log_dirs()
-    print("[OK] docs/logs 스켈레톤 생성:", LOGS_DIR)
+    print("[OK] docs/exp_logs 스켈레톤 생성:", LOGS_DIR)

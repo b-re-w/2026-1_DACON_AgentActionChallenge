@@ -2,20 +2,20 @@
 
 모든 실험 에이전트는 **실험이 끝나면 반드시** 결과를 기록한다. 기록 위치는 두 곳:
 
-1. **상세 기록** — `docs/logs/<컨셉>/<YYYY-MM-DD>.md`
+1. **상세 기록** — `docs/exp_logs/<컨셉>/<YYYY-MM-DD>.md`
    컨셉별 폴더 · **날짜별 파일**(형식 `YYYY-MM-DD`로 통일). 같은 날 여러 실험은
    시각 섹션(`## [HH:MM] 타이틀`)으로 한 파일에 이어붙인다.
-2. **요약 인덱스** — `docs/logs/LOG.md`
+2. **요약 인덱스** — `docs/exp_logs/LOG.md`
    실험마다 **한 줄**: 날짜 · 컨셉 · 타이틀 · 핵심 수치 · 상세 링크.
 
 ## 컨셉 폴더 (컨셉별로 로그 폴더가 따로 있음)
 
 | 폴더 | 컨셉 |
 |------|------|
-| `docs/logs/encoder_team/` | 접근 A · Encoder-based (mDeBERTa/XLM-R) |
-| `docs/logs/decoder_team/` | 접근 B · Decoder-based SLM (Qwen3 등) |
-| `docs/logs/speculative_team/` | 접근 C · Speculative Decoding/MatFormer (Gemma 3n) |
-| `docs/logs/others/` | 기타 (데이터·검증·앙상블·전처리 등) |
+| `docs/exp_logs/encoder_team/` | 접근 A · Encoder-based (mDeBERTa/XLM-R) |
+| `docs/exp_logs/decoder_team/` | 접근 B · Decoder-based SLM (Qwen3 등) |
+| `docs/exp_logs/speculative_team/` | 접근 C · Speculative Decoding/MatFormer (Gemma 3n) |
+| `docs/exp_logs/others/` | 기타 (데이터·검증·앙상블·전처리 등) |
 
 ## 사용법 — 손으로 파일 쓰지 말고 헬퍼를 호출한다
 
