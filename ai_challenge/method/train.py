@@ -56,6 +56,9 @@ def main() -> None:
                     help="옵티마이저. 큰 모델은 paged_adamw_8bit (bitsandbytes)")
     ap.add_argument("--keep-columns", action="store_true",
                     help="remove_unused_columns=False (transformers 5.x 에서 labels 유지)")
+    ap.add_argument("--manual-oof", action="store_true",
+                    help="in-loop eval 끄고 학습 후 predict_logits 로 OOF 산출 "
+                         "(transformers 5.x eval 루프가 compute_metrics 를 안 부르는 문제 우회)")
     args = ap.parse_args()
 
     out = Path(args.out)
@@ -82,6 +85,7 @@ def main() -> None:
         grad_checkpoint=args.grad_checkpoint, all_data=args.all_data,
         seed=args.seed, optim=args.optim,
         remove_unused_columns=not args.keep_columns,
+        inloop_eval=not args.manual_oof,
     )
     trainer = WeightedTrainer(
         model=model, args=targs, train_dataset=train_ds, eval_dataset=val_ds,
@@ -89,10 +93,33 @@ def main() -> None:
         compute_metrics=compute_metrics, class_weights=class_weights,
     )
     trainer.train()
-    save_submission_model(trainer, tok, out, args.max_length)
+    model_dir = save_submission_model(trainer, tok, out, args.max_length)
 
     if args.all_data:
         print(f"[done] all-data 학습 완료 -> {out}/model", flush=True)
+        return
+
+    if args.manual_oof:
+        # transformers 5.x eval 루프 우회: 저장된 모델을 predict_logits 로 재추론해 OOF 산출
+        from sklearn.metrics import accuracy_score, f1_score
+
+        from ai_challenge.datasets import CLASS_TO_ID
+        from ai_challenge.models.common import predict_logits
+
+        val_samples = val_ds.samples
+        logits = predict_logits(str(model_dir), val_samples, max_length=args.max_length,
+                                serialize_kwargs=SERIALIZE_PRESETS[args.serialize])
+        preds = logits.argmax(-1)
+        y = [CLASS_TO_ID[s.action] for s in val_samples]
+        macro = f1_score(y, preds, average="macro")
+        acc = accuracy_score(y, preds)
+        write_oof(out, val_samples, preds)
+        write_metrics(out, {
+            "model": args.model, "val_fold": args.val_fold,
+            "macro_f1": float(macro), "acc": float(acc),
+            "n_train": len(train_ds), "n_val": len(val_samples),
+        })
+        print(f"[done] (manual-oof) macro_f1={macro:.4f} -> {out}/model", flush=True)
         return
 
     metrics = trainer.evaluate()
