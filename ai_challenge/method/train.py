@@ -54,6 +54,8 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=42, help="앙상블 다양성용 시드")
     ap.add_argument("--optim", default="adamw_torch",
                     help="옵티마이저. 큰 모델은 paged_adamw_8bit (bitsandbytes)")
+    ap.add_argument("--keep-columns", action="store_true",
+                    help="remove_unused_columns=False (transformers 5.x 에서 labels 유지)")
     args = ap.parse_args()
 
     out = Path(args.out)
@@ -79,6 +81,7 @@ def main() -> None:
         weight_decay=args.weight_decay, bf16=args.bf16, num_workers=args.num_workers,
         grad_checkpoint=args.grad_checkpoint, all_data=args.all_data,
         seed=args.seed, optim=args.optim,
+        remove_unused_columns=not args.keep_columns,
     )
     trainer = WeightedTrainer(
         model=model, args=targs, train_dataset=train_ds, eval_dataset=val_ds,
