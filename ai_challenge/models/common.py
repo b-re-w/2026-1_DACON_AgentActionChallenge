@@ -65,6 +65,12 @@ def build_model(model_name: str, tokenizer, grad_checkpoint: bool = False):
     model.resize_token_embeddings(len(tokenizer))
     if model.config.pad_token_id is None:
         model.config.pad_token_id = tokenizer.pad_token_id
+    # 멀티모달/중첩 config(예: qwen3_5 는 text_config·vision_config 보유) 에서는
+    # seq-cls forward 가 하위 text_config.pad_token_id 를 읽으므로 거기에도 전파한다.
+    for sub_name in ("text_config", "llm_config", "language_config"):
+        sub = getattr(model.config, sub_name, None)
+        if sub is not None and getattr(sub, "pad_token_id", None) is None:
+            sub.pad_token_id = model.config.pad_token_id
     if grad_checkpoint:
         model.config.use_cache = False
     return model
