@@ -51,6 +51,9 @@ def main() -> None:
     ap.add_argument("--grad-checkpoint", action="store_true")
     ap.add_argument("--serialize", default="base", choices=list(SERIALIZE_PRESETS),
                     help="입력 직렬화 프리셋 (입력 신호 실험용)")
+    ap.add_argument("--seed", type=int, default=42, help="앙상블 다양성용 시드")
+    ap.add_argument("--optim", default="adamw_torch",
+                    help="옵티마이저. 큰 모델은 paged_adamw_8bit (bitsandbytes)")
     args = ap.parse_args()
 
     out = Path(args.out)
@@ -75,6 +78,7 @@ def main() -> None:
         grad_accum=args.grad_accum, warmup_ratio=args.warmup_ratio,
         weight_decay=args.weight_decay, bf16=args.bf16, num_workers=args.num_workers,
         grad_checkpoint=args.grad_checkpoint, all_data=args.all_data,
+        seed=args.seed, optim=args.optim,
     )
     trainer = WeightedTrainer(
         model=model, args=targs, train_dataset=train_ds, eval_dataset=val_ds,

@@ -103,7 +103,8 @@ class KDTrainer(Trainer):
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--teacher-dir", required=True)
+    ap.add_argument("--teacher-dir", required=True, nargs="+",
+                    help="teacher model 디렉터리(들). 여러 개면 soft-label 평균(앙상블).")
     ap.add_argument("--student", default="Qwen/Qwen2.5-0.5B")
     ap.add_argument("--out", required=True)
     ap.add_argument("--val-fold", type=int, default=0)
@@ -143,12 +144,15 @@ def main() -> None:
         tl_train, tl_val = z["train"], z["val"]
         print("[teacher] cache 사용", flush=True)
     else:
-        print("[teacher] soft-label 생성...", flush=True)
-        tl_train = predict_logits(args.teacher_dir, train_samples, max_length=args.max_length,
-                                  serialize_kwargs=sk)
-        tl_val = (predict_logits(args.teacher_dir, val_samples, max_length=args.max_length,
-                                 serialize_kwargs=sk)
-                  if val_samples else np.zeros((0, NUM_CLASSES), np.float32))
+        print(f"[teacher] soft-label 생성 ({len(args.teacher_dir)}개 teacher 평균)...", flush=True)
+        tl_train = np.zeros((len(train_samples), NUM_CLASSES), np.float32)
+        tl_val = np.zeros((len(val_samples), NUM_CLASSES), np.float32)
+        for td in args.teacher_dir:
+            tl_train += predict_logits(td, train_samples, max_length=args.max_length, serialize_kwargs=sk)
+            if val_samples:
+                tl_val += predict_logits(td, val_samples, max_length=args.max_length, serialize_kwargs=sk)
+        tl_train /= len(args.teacher_dir)  # logit 평균(앙상블)
+        tl_val /= len(args.teacher_dir)
         np.savez(cache, train=tl_train, val=tl_val)
     if val_samples:
         yv = np.array([CLASS_TO_ID[s.action] for s in val_samples])

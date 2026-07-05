@@ -137,14 +137,19 @@ def build_training_args(
     grad_checkpoint: bool = False,
     all_data: bool = False,
     remove_unused_columns: bool = True,
+    seed: int = 42,
+    optim: str = "adamw_torch",
 ) -> TrainingArguments:
     """train·distill 공용 TrainingArguments (all_data 면 eval/save 끔).
 
     distill 은 데이터셋에 teacher_logits 컬럼을 실어 보내므로 remove_unused_columns=False
     로 호출해야 한다(기본 True 면 collator 전에 제거되어 KeyError).
+    seed: 앙상블 다양성용. optim: 큰 모델은 "paged_adamw_8bit"(bitsandbytes)로 메모리 절약.
     """
     return TrainingArguments(
         remove_unused_columns=remove_unused_columns,
+        seed=seed,
+        optim=optim,
         output_dir=str(Path(out_dir) / "hf"),
         num_train_epochs=epochs,
         per_device_train_batch_size=batch_size,
