@@ -217,11 +217,14 @@ def write_metrics(out_dir, payload: dict) -> None:
 
 
 @torch.inference_mode()
-def predict_logits(model_dir, samples, max_length: int = 512, batch_size: int = 128):
+def predict_logits(model_dir, samples, max_length: int = 512, batch_size: int = 128,
+                   serialize_kwargs=None):
     """저장된 모델로 샘플들의 14-class logits 계산 (길이정렬 배칭).
 
     tune_threshold(OOF logits)·distill(teacher soft-label) 이 공유한다.
+    serialize_kwargs: 직렬화 프리셋(teacher/student 입력 일치가 중요).
     """
+    sk = serialize_kwargs or {}
     tok = AutoTokenizer.from_pretrained(str(model_dir))
     model = (
         AutoModelForSequenceClassification.from_pretrained(str(model_dir))
@@ -229,7 +232,7 @@ def predict_logits(model_dir, samples, max_length: int = 512, batch_size: int = 
         .half()
         .eval()
     )
-    texts = [serialize_sample(s) for s in samples]
+    texts = [serialize_sample(s, **sk) for s in samples]
     order = sorted(range(len(texts)), key=lambda i: len(texts[i]))
     out = np.zeros((len(texts), NUM_CLASSES), dtype=np.float32)
     for st in range(0, len(order), batch_size):

@@ -26,6 +26,7 @@ from transformers import DataCollatorWithPadding, Trainer
 from ai_challenge.datasets import (
     CLASS_TO_ID,
     NUM_CLASSES,
+    SERIALIZE_PRESETS,
     load_folds,
     load_records,
     serialize_sample,
@@ -45,18 +46,20 @@ from ai_challenge.models.common import (
 class KDDataset(Dataset):
     """student 입력 + teacher soft-label(14-dim) 을 함께 반환."""
 
-    def __init__(self, samples, t_logits, tokenizer, max_length):
+    def __init__(self, samples, t_logits, tokenizer, max_length, serialize_kwargs=None):
         self.samples = samples
         self.t_logits = t_logits
         self.tok = tokenizer
         self.max_length = max_length
+        self.serialize_kwargs = serialize_kwargs or {}
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
         s = self.samples[idx]
-        enc = self.tok(serialize_sample(s), truncation=True, max_length=self.max_length)
+        enc = self.tok(serialize_sample(s, **self.serialize_kwargs),
+                       truncation=True, max_length=self.max_length)
         item = {k: enc[k] for k in enc}
         item["labels"] = CLASS_TO_ID[s.action]
         item["teacher_logits"] = self.t_logits[idx].tolist()
@@ -115,7 +118,10 @@ def main() -> None:
     ap.add_argument("--num-workers", type=int, default=4)
     ap.add_argument("--grad-checkpoint", action="store_true")
     ap.add_argument("--all-data", action="store_true")
+    ap.add_argument("--serialize", default="base", choices=list(SERIALIZE_PRESETS),
+                    help="입력 직렬화 프리셋 (teacher soft-label·student 입력 모두 적용)")
     args = ap.parse_args()
+    sk = SERIALIZE_PRESETS[args.serialize]
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -138,8 +144,10 @@ def main() -> None:
         print("[teacher] cache 사용", flush=True)
     else:
         print("[teacher] soft-label 생성...", flush=True)
-        tl_train = predict_logits(args.teacher_dir, train_samples, max_length=args.max_length)
-        tl_val = (predict_logits(args.teacher_dir, val_samples, max_length=args.max_length)
+        tl_train = predict_logits(args.teacher_dir, train_samples, max_length=args.max_length,
+                                  serialize_kwargs=sk)
+        tl_val = (predict_logits(args.teacher_dir, val_samples, max_length=args.max_length,
+                                 serialize_kwargs=sk)
                   if val_samples else np.zeros((0, NUM_CLASSES), np.float32))
         np.savez(cache, train=tl_train, val=tl_val)
     if val_samples:
@@ -147,8 +155,9 @@ def main() -> None:
         print(f"[teacher] val argmax macro_f1 = {f1_score(yv, tl_val.argmax(1), average='macro'):.4f}", flush=True)
 
     tok = build_tokenizer(args.student)
-    train_ds = KDDataset(train_samples, tl_train, tok, args.max_length)
-    val_ds = KDDataset(val_samples, tl_val, tok, args.max_length) if val_samples else None
+    train_ds = KDDataset(train_samples, tl_train, tok, args.max_length, serialize_kwargs=sk)
+    val_ds = (KDDataset(val_samples, tl_val, tok, args.max_length, serialize_kwargs=sk)
+              if val_samples else None)
 
     model = build_model(args.student, tok, grad_checkpoint=args.grad_checkpoint)
     targs = build_training_args(
