@@ -252,7 +252,12 @@ def predict_logits(model_dir, samples, max_length: int = 512, batch_size: int = 
         logit = model(**enc).logits.float().cpu().numpy()
         for pos, i in enumerate(chunk):
             out[i] = logit[pos]
-    del model
+    # 앙상블에서 teacher 를 여러 개 순차 로드하므로 확실히 해제(누수 방지)
+    import gc
+
+    model.cpu()
+    del model, tok
+    gc.collect()
     torch.cuda.empty_cache()
     return out
 
