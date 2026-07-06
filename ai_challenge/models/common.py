@@ -176,12 +176,15 @@ def build_training_args(
         metric_for_best_model="macro_f1",
         greater_is_better=True,
         dataloader_num_workers=num_workers,
-        gradient_checkpointing=grad_checkpoint,
+        # FSDP 에서는 TrainingArguments 의 gradient_checkpointing 이 backward 에 전체 AllGather 를
+        #유발(OOM)하므로 끄고, fsdp_config 의 activation_checkpointing 을 사용한다.
+        gradient_checkpointing=grad_checkpoint and not fsdp,
         logging_steps=50,
         report_to=[],
         disable_tqdm=False,
         **({"fsdp": fsdp,
             "fsdp_config": {"transformer_layer_cls_to_wrap": [fsdp_layer_cls],
+                            "activation_checkpointing": grad_checkpoint,
                             "backward_prefetch": "backward_pre",
                             "use_orig_params": True}}
            if fsdp else {}),
