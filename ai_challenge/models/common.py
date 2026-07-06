@@ -146,6 +146,8 @@ def build_training_args(
     inloop_eval: bool = True,
     seed: int = 42,
     optim: str = "adamw_torch",
+    fsdp: str = "",
+    fsdp_layer_cls: str = "Qwen2DecoderLayer",
 ) -> TrainingArguments:
     """train·distill 공용 TrainingArguments (all_data 면 eval/save 끔).
 
@@ -178,6 +180,11 @@ def build_training_args(
         logging_steps=50,
         report_to=[],
         disable_tqdm=False,
+        **({"fsdp": fsdp,
+            "fsdp_config": {"transformer_layer_cls_to_wrap": [fsdp_layer_cls],
+                            "backward_prefetch": "backward_pre",
+                            "use_orig_params": True}}
+           if fsdp else {}),
     )
 
 

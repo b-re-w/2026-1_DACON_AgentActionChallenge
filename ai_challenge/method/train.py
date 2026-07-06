@@ -59,6 +59,10 @@ def main() -> None:
     ap.add_argument("--manual-oof", action="store_true",
                     help="in-loop eval 끄고 학습 후 predict_logits 로 OOF 산출 "
                          "(transformers 5.x eval 루프가 compute_metrics 를 안 부르는 문제 우회)")
+    ap.add_argument("--fsdp", default="",
+                    help="FSDP 샤딩 (예: 'full_shard auto_wrap'). torchrun --nproc_per_node=N 로 실행. 대형(14B) 다중 GPU용")
+    ap.add_argument("--fsdp-layer-cls", default="Qwen2DecoderLayer",
+                    help="FSDP auto_wrap 대상 트랜스포머 레이어 클래스명")
     args = ap.parse_args()
 
     out = Path(args.out)
@@ -86,6 +90,7 @@ def main() -> None:
         seed=args.seed, optim=args.optim,
         remove_unused_columns=not args.keep_columns,
         inloop_eval=not args.manual_oof,
+        fsdp=args.fsdp, fsdp_layer_cls=args.fsdp_layer_cls,
     )
     trainer = WeightedTrainer(
         model=model, args=targs, train_dataset=train_ds, eval_dataset=val_ds,
