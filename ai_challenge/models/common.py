@@ -186,7 +186,7 @@ def build_training_args(
             "fsdp_config": {"transformer_layer_cls_to_wrap": [fsdp_layer_cls],
                             "activation_checkpointing": grad_checkpoint,
                             "backward_prefetch": "backward_pre",
-                            "use_orig_params": True}}
+                            "use_orig_params": False}}
            if fsdp else {}),
     )
 
