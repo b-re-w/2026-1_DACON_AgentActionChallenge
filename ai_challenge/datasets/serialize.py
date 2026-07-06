@@ -11,6 +11,7 @@ git_dirty, current_prompt 키워드)를 명시적 토큰으로 드러내는 것�
 from __future__ import annotations
 
 import os
+import re
 
 from .io import ActionSample
 
@@ -19,6 +20,42 @@ TOK_META = "[META]"
 TOK_LAST = "[LAST_ACTION]"
 TOK_HISTORY = "[HISTORY]"
 TOK_PROMPT = "[PROMPT]"
+TOK_CUES = "[CUES]"
+
+# 탐색도구 4개(read_file/grep_search/list_directory/glob_pattern) 판별 전용 신호.
+# 에러분석상 macro-F1 병목이 이 4클래스 상호혼동이라, prompt 에서 각 도구를 시사하는
+# 표층 단서를 명시 토큰으로 드러내 teacher/student 가 쉽게 집도록 한다.
+_FILE_RE = re.compile(
+    r"[\w./-]*\.(?:py|js|ts|tsx|jsx|go|rs|java|c|cc|cpp|h|hpp|rb|php|cs|kt|swift|scala|sh|"
+    r"ya?ml|json|toml|cfg|ini|md|txt|sql|html|css|xml|lock|mod|sum|proto|gradle|env)",
+    re.I,
+)
+_WILDCARD_RE = re.compile(r"[*?]|\ball\b[^.]{0,20}\bfiles?\b|모든[^.]{0,10}파일|전부[^.]{0,10}파일|\*\.\w+", re.I)
+_DIR_RE = re.compile(r"[\w./-]+/(?:\s|$)|폴더|디렉터리|디렉토리|structure|구조|안에\s|어떤.{0,6}있|목록|contents of|ls\b|dir\b", re.I)
+_SEARCH_RE = re.compile(r"\bgrep\b|\bsearch\b|\bfind\b|찾|검색|어디서|어디에|\bwhere\b|사용.{0,4}곳|참조|references?\b|usages?\b", re.I)
+_READ_RE = re.compile(r"\bread\b|\bshow\b|\bopen\b|보여|열어|까보|내용|살펴|어떻게.{0,4}생겼|들여다", re.I)
+_LIST_RE = re.compile(r"\blist\b|\bls\b|목록|무엇이.{0,4}있|뭐가.{0,4}있|어떤.{0,4}파일|나열|tree\b", re.I)
+
+
+def _format_cues(sample: ActionSample) -> str:
+    prompt = sample.current_prompt or ""
+    ws = sample.workspace
+    files = _FILE_RE.findall(prompt)  # 확장자 그룹이 아닌 전체매치 위해 finditer 사용
+    file_names = [m.group(0) for m in _FILE_RE.finditer(prompt)]
+    open_base = {os.path.basename(str(p)).lower() for p in (ws.get("open_files") or [])}
+    ment_in_open = int(any(os.path.basename(f).lower() in open_base for f in file_names))
+    parts = [
+        f"nfile={len(file_names)}",
+        f"fopen={ment_in_open}",
+        f"wild={int(bool(_WILDCARD_RE.search(prompt)))}",
+        f"dir={int(bool(_DIR_RE.search(prompt)))}",
+        f"search={int(bool(_SEARCH_RE.search(prompt)))}",
+        f"read={int(bool(_READ_RE.search(prompt)))}",
+        f"list={int(bool(_LIST_RE.search(prompt)))}",
+    ]
+    if file_names:
+        parts.append("names=" + ",".join(os.path.basename(f) for f in file_names[:4]))
+    return " ".join(parts)
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -75,6 +112,7 @@ def serialize_sample(
     include_meta: bool = True,
     include_history: bool = True,
     include_last_action: bool = True,
+    include_cues: bool = False,
 ) -> str:
     """샘플을 단일 문자열로 직렬화.
 
@@ -88,6 +126,9 @@ def serialize_sample(
 
     if include_last_action:
         chunks.append(f"{TOK_LAST} {sample.last_action or 'none'}")
+
+    if include_cues:
+        chunks.append(f"{TOK_CUES} {_format_cues(sample)}")
 
     if include_history and sample.history:
         recent = sample.history[-max_history_turns:]
@@ -112,8 +153,12 @@ SERIALIZE_PRESETS: dict[str, dict] = {
     "hist": {"max_history_turns": 16, "history_text_limit": 280, "arg_value_limit": 80, "n_args": 8},
     "rich": {"open_files_names": 8, "max_history_turns": 16, "history_text_limit": 280,
              "arg_value_limit": 80, "n_args": 8},
+    # 탐색도구 4개 판별 힌트 주입(병목 클래스 공략). base + [CUES].
+    "cues": {"include_cues": True, "open_files_names": 8},
+    "cues_hist": {"include_cues": True, "open_files_names": 8, "max_history_turns": 16,
+                  "history_text_limit": 280, "arg_value_limit": 80, "n_args": 8},
 }
 
 
 # 토크나이저에 추가하면 좋은 special token 목록 (선택)
-SPECIAL_TOKENS: list[str] = [TOK_META, TOK_LAST, TOK_HISTORY, TOK_PROMPT]
+SPECIAL_TOKENS: list[str] = [TOK_META, TOK_LAST, TOK_HISTORY, TOK_PROMPT, TOK_CUES]
