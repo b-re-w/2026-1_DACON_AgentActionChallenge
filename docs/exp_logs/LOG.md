@@ -26,3 +26,6 @@
 | 2026-07-05 | speculative_team | Teacher 앙상블 seed별 3B OOF | base_s42=0.7745, s43=0.7717, s44=0.7721, s45=0.7713, s47=0.7762, s46_diverged=0.7334, rich_s42=0.7676 | [로그](speculative_team/2026-07-05.md) |
 | 2026-07-05 | others | 에러분석 — 천장 진단(탐색도구 애매성) | edit/write/patch/respond_F1=0.95~0.996, read/grep/list/glob_F1=0.53~0.67 | [로그](others/2026-07-05.md) |
 | 2026-07-05 | decoder_team | 다른 아키텍처 student (인코더 KD) | xlm_roberta_base=0.6398, mdeberta_v3_base=0.5968, qwen0.5B_ref=0.779 | [로그](decoder_team/2026-07-05.md) |
+| 2026-07-06 | speculative_team | Qwen3 라운드 — teacher·student 전부 미달/동률 | q3_4b_teacher=0.7727, q3_1.7b_teacher=0.7702, qwen2.5_3b_teacher=0.7745, q3_0.6b_student=0.7794, gemma3_270m_student=0.7763, qwen2.5_0.5b_student=0.779 | [로그](speculative_team/2026-07-06.md) |
+| 2026-07-06 | speculative_team | 다양성 앙상블 제출 → LB 0.78621 (최고 갱신) | lb=0.78621, fold0_oof=0.7816, prev_best_lb=0.78519, delta=+0.001 | [로그](speculative_team/2026-07-06.md) |
+| 2026-07-06 | others | 대형 teacher·5.x·FSDP 환경 제약 정리 | qwen7b=진행중, 14b_fsdp=PCIe 146h 비현실적, claude4b=0.7719, gpt5_4b=0.7741, r1_7b=0.7655 | [로그](others/2026-07-06.md) |
