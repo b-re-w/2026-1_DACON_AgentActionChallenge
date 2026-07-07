@@ -54,12 +54,46 @@ I/O 계약:
 import csv
 import json
 import os
+import re
 
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 # --- 직렬화 (datasets/serialize.py 와 동일; raw dict 버전) ---
 TOK_META, TOK_LAST, TOK_HISTORY, TOK_PROMPT = "[META]", "[LAST_ACTION]", "[HISTORY]", "[PROMPT]"
+TOK_CUES = "[CUES]"
+
+# 탐색도구 판별 힌트(serialize.py 와 동일 정규식)
+_FILE_RE = re.compile(
+    r"[\w./-]*\.(?:py|js|ts|tsx|jsx|go|rs|java|c|cc|cpp|h|hpp|rb|php|cs|kt|swift|scala|sh|"
+    r"ya?ml|json|toml|cfg|ini|md|txt|sql|html|css|xml|lock|mod|sum|proto|gradle|env)",
+    re.I,
+)
+_WILDCARD_RE = re.compile(r"[*?]|\ball\b[^.]{0,20}\bfiles?\b|모든[^.]{0,10}파일|전부[^.]{0,10}파일|\*\.\w+", re.I)
+_DIR_RE = re.compile(r"[\w./-]+/(?:\s|$)|폴더|디렉터리|디렉토리|structure|구조|안에\s|어떤.{0,6}있|목록|contents of|ls\b|dir\b", re.I)
+_SEARCH_RE = re.compile(r"\bgrep\b|\bsearch\b|\bfind\b|찾|검색|어디서|어디에|\bwhere\b|사용.{0,4}곳|참조|references?\b|usages?\b", re.I)
+_READ_RE = re.compile(r"\bread\b|\bshow\b|\bopen\b|보여|열어|까보|내용|살펴|어떻게.{0,4}생겼|들여다", re.I)
+_LIST_RE = re.compile(r"\blist\b|\bls\b|목록|무엇이.{0,4}있|뭐가.{0,4}있|어떤.{0,4}파일|나열|tree\b", re.I)
+
+
+def _format_cues(sample):
+    prompt = sample.get("current_prompt", "") or ""
+    ws = (sample.get("session_meta", {}) or {}).get("workspace", {}) or {}
+    file_names = [m.group(0) for m in _FILE_RE.finditer(prompt)]
+    open_base = {os.path.basename(str(p)).lower() for p in (ws.get("open_files") or [])}
+    ment_in_open = int(any(os.path.basename(f).lower() in open_base for f in file_names))
+    parts = [
+        f"nfile={len(file_names)}",
+        f"fopen={ment_in_open}",
+        f"wild={int(bool(_WILDCARD_RE.search(prompt)))}",
+        f"dir={int(bool(_DIR_RE.search(prompt)))}",
+        f"search={int(bool(_SEARCH_RE.search(prompt)))}",
+        f"read={int(bool(_READ_RE.search(prompt)))}",
+        f"list={int(bool(_LIST_RE.search(prompt)))}",
+    ]
+    if file_names:
+        parts.append("names=" + ",".join(os.path.basename(f) for f in file_names[:4]))
+    return " ".join(parts)
 
 
 def _truncate(text, limit):
@@ -74,7 +108,7 @@ def _last_action(history):
     return None
 
 
-def _format_meta(sample):
+def _format_meta(sample, open_files_names=0):
     sm = sample.get("session_meta", {}) or {}
     ws = sm.get("workspace", {}) or {}
     open_files = ws.get("open_files") or []
@@ -88,6 +122,9 @@ def _format_meta(sample):
         f"open_files={len(open_files)}",
         f"loc={ws.get('loc', 0)}",
     ]
+    if open_files_names and open_files:
+        names = [os.path.basename(str(p)) for p in open_files[:open_files_names]]
+        parts.append("openf=" + ",".join(names))
     lang_mix = ws.get("language_mix") or {}
     if lang_mix:
         top = sorted(lang_mix.items(), key=lambda kv: -kv[1])[:3]
@@ -104,9 +141,12 @@ def _format_history_turn(turn, text_limit):
     return f"A: {name}({arg_str}) -> {_truncate(turn.get('result_summary', ''), text_limit)}"
 
 
-def serialize(sample, max_history_turns=12, prompt_limit=512, history_text_limit=160):
-    chunks = [f"{TOK_META} {_format_meta(sample)}",
+def serialize(sample, max_history_turns=12, prompt_limit=512, history_text_limit=160,
+              include_cues=False, open_files_names=0):
+    chunks = [f"{TOK_META} {_format_meta(sample, open_files_names=open_files_names)}",
               f"{TOK_LAST} {_last_action(sample.get('history', []) or []) or 'none'}"]
+    if include_cues:
+        chunks.append(f"{TOK_CUES} {_format_cues(sample)}")
     history = sample.get("history", []) or []
     if history:
         recent = history[-max_history_turns:]
@@ -136,8 +176,13 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     cfg_path = os.path.join(MODEL_DIR, "infer_config.json")
     max_length = 512
+    serialize_mode = "base"
     if os.path.exists(cfg_path):
-        max_length = int(json.load(open(cfg_path)).get("max_length", 512))
+        _cfg = json.load(open(cfg_path))
+        max_length = int(_cfg.get("max_length", 512))
+        serialize_mode = _cfg.get("serialize", "base")
+    include_cues = serialize_mode in ("cues", "cues_hist")
+    open_files_names = 8 if serialize_mode in ("cues", "cues_hist", "paths", "rich") else 0
     batch_size = 64
 
     print(f"Load model on {device} (max_length={max_length})...")
@@ -150,8 +195,9 @@ def main():
 
     samples = load_jsonl(TEST_PATH)
     ids = [s.get("id", "") for s in samples]
-    texts = [serialize(s, prompt_limit=max_length) for s in samples]
-    print(f"samples={len(samples)}")
+    texts = [serialize(s, prompt_limit=max_length, include_cues=include_cues,
+                       open_files_names=open_files_names) for s in samples]
+    print(f"samples={len(samples)} serialize={serialize_mode}")
 
     # 길이 정렬 배칭: 비슷한 길이끼리 묶어 동적 패딩 낭비를 줄인다(정확도 무영향, 속도 ↑).
     # 예측은 원래 순서(preds_by_idx)에 되돌려 넣는다.
@@ -209,8 +255,12 @@ def to_fp16_dir(model_dir: Path, dst: Path) -> None:
             shutil.copy(src, dst / name)
 
 
-def pack(model_dir, out=None, name=None, fp16: bool = True) -> Path:
-    """학습된 model/ 를 제출 zip 으로 패키징한다. out 미지정 시 build/<name>.zip."""
+def pack(model_dir, out=None, name=None, fp16: bool = True, serialize_mode="base") -> Path:
+    """학습된 model/ 를 제출 zip 으로 패키징한다. out 미지정 시 build/<name>.zip.
+
+    serialize_mode: 추론 직렬화 프리셋(학습과 일치해야 함). script.py 가 infer_config 의
+    ``serialize`` 값을 읽어 cues 등을 켠다.
+    """
     model_dir = Path(model_dir)
     if not model_dir.is_dir():
         raise SystemExit(f"model dir 없음: {model_dir}")
@@ -228,6 +278,19 @@ def pack(model_dir, out=None, name=None, fp16: bool = True) -> Path:
         src_dir = tmp
     else:
         src_dir = model_dir
+
+    # infer_config 에 serialize 모드 주입(추론이 학습과 같은 직렬화를 쓰도록).
+    # fp16 이면 tmp(우리 소유)에 쓰고, 아니면 tmp 를 새로 만들어 원본 훼손을 피한다.
+    if not fp16:
+        tmp = Path(tempfile.mkdtemp(prefix="pack_cfg_"))
+        for p in src_dir.iterdir():
+            if p.is_file():
+                shutil.copy(p, tmp / p.name)
+        src_dir = tmp
+    icfg_path = src_dir / "infer_config.json"
+    icfg = json.loads(icfg_path.read_text()) if icfg_path.exists() else {}
+    icfg["serialize"] = serialize_mode
+    icfg_path.write_text(json.dumps(icfg))
 
     skip = {"optimizer.pt", "scheduler.pt", "trainer_state.json", "training_args.bin", "rng_state.pth"}
     files = [p for p in sorted(src_dir.rglob("*")) if p.is_file() and p.name not in skip]
@@ -298,6 +361,8 @@ def main() -> None:
     pp.add_argument("--name", default=None, help="출력 이름(build/<name>.zip). 미지정 시 runs 이름")
     pp.add_argument("--out", default=None, help="출력 경로 직접 지정")
     pp.add_argument("--no-fp16", action="store_true")
+    pp.add_argument("--serialize", default="base",
+                    help="추론 직렬화 프리셋(학습과 일치). cues 등")
 
     pe = sub.add_parser("eval", help="제출 전 로컬 검증(평가 서버 모사)")
     pe.add_argument("--zip", required=True)
@@ -305,7 +370,8 @@ def main() -> None:
 
     args = ap.parse_args()
     if args.cmd == "pack":
-        pack(args.model_dir, out=args.out, name=args.name, fp16=not args.no_fp16)
+        pack(args.model_dir, out=args.out, name=args.name, fp16=not args.no_fp16,
+             serialize_mode=args.serialize)
     elif args.cmd == "eval":
         local_eval(args.zip, data=args.data)
 
