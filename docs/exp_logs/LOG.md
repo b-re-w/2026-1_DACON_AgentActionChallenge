@@ -29,3 +29,9 @@
 | 2026-07-06 | speculative_team | Qwen3 라운드 — teacher·student 전부 미달/동률 | q3_4b_teacher=0.7727, q3_1.7b_teacher=0.7702, qwen2.5_3b_teacher=0.7745, q3_0.6b_student=0.7794, gemma3_270m_student=0.7763, qwen2.5_0.5b_student=0.779 | [로그](speculative_team/2026-07-06.md) |
 | 2026-07-06 | speculative_team | 다양성 앙상블 제출 → LB 0.78621 (최고 갱신) | lb=0.78621, fold0_oof=0.7816, prev_best_lb=0.78519, delta=+0.001 | [로그](speculative_team/2026-07-06.md) |
 | 2026-07-06 | others | 대형 teacher·5.x·FSDP 환경 제약 정리 | qwen7b=진행중, 14b_fsdp=PCIe 146h 비현실적, claude4b=0.7719, gpt5_4b=0.7741, r1_7b=0.7655 | [로그](others/2026-07-06.md) |
+| 2026-07-06 | speculative_team | GPT5×2 가중 앙상블 → LB 0.78740 (6위) | lb=0.7874, prev=0.78621, delta=+0.0012, proxy=0.7841 | [로그](speculative_team/2026-07-06.md) |
+| 2026-07-07 | others | cues(탐색도구 힌트) 최종 폐기 | teacher_cues=0.7693, teacher_base_ctl=0.7678, student_cues_lb=0.78272, best_lb=0.7874 | [로그](others/2026-07-07.md) |
+| 2026-07-08 | others | fold0 OOF↔LB 관계 확립 (+0.0042 안정) | single=0.7801→0.78391, ens4=0.7810→0.78519, div5=0.7816→0.78621, gap=+0.0038~0.0046 | [로그](others/2026-07-08.md) |
+| 2026-07-08 | decoder_team | 1.5B student 용량레버 + int4 제출 실패 | 1.5b_fold0=0.7829, 0.5b_fold0=0.7816, int4_loss=-0.0008, int4_zip=1.047GB, lb=FAILED | [로그](decoder_team/2026-07-08.md) |
+| 2026-07-08 | speculative_team | 가중치 변형 LB(2에폭 undertrained 무효) | w6_x2_3ep=0.7874, w15_x1.5_2ep=0.7838, w30_x3_2ep=0.78359, w25_x2.5_2ep=0.78098 | [로그](speculative_team/2026-07-08.md) |
+| 2026-07-08 | others | 이질 teacher 풀 확장 실패(4종 <0.774) | r1q3b=0.7723, r132b3b=0.763, gptoss4b=<0.7, q3binst=<0.77 | [로그](others/2026-07-08.md) |
