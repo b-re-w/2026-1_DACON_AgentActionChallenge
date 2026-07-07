@@ -188,10 +188,16 @@ def main():
 
     print(f"Load model on {device} (max_length={max_length})...")
     tok = AutoTokenizer.from_pretrained(MODEL_DIR)
-    model = AutoModelForSequenceClassification.from_pretrained(MODEL_DIR)
-    model.to(device).eval()
-    if device == "cuda":
-        model.half()
+    # 저장된 config 에 quantization_config 가 있으면 bitsandbytes 4bit 로 자동 로드됨.
+    _mcfg = json.load(open(os.path.join(MODEL_DIR, "config.json")))
+    quantized = "quantization_config" in _mcfg
+    if quantized:
+        model = AutoModelForSequenceClassification.from_pretrained(MODEL_DIR, device_map=device).eval()
+    else:
+        model = AutoModelForSequenceClassification.from_pretrained(MODEL_DIR)
+        model.to(device).eval()
+        if device == "cuda":
+            model.half()
     id2label = model.config.id2label
 
     samples = load_jsonl(TEST_PATH)
@@ -256,11 +262,29 @@ def to_fp16_dir(model_dir: Path, dst: Path) -> None:
             shutil.copy(src, dst / name)
 
 
-def pack(model_dir, out=None, name=None, fp16: bool = True, serialize_mode="base") -> Path:
+def to_int4_dir(model_dir: Path, dst: Path) -> None:
+    """model_dir 를 bitsandbytes nf4(4bit) 로 재저장(1.5B 등 큰 모델 1GB 대응)."""
+    import torch
+    from transformers import AutoModelForSequenceClassification, BitsAndBytesConfig
+
+    dst.mkdir(parents=True, exist_ok=True)
+    bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                             bnb_4bit_compute_dtype=torch.float16)
+    model = AutoModelForSequenceClassification.from_pretrained(
+        model_dir, quantization_config=bnb, device_map="cuda")
+    model.save_pretrained(dst)
+    for name in _TOK_FILES:
+        src = model_dir / name
+        if src.exists():
+            shutil.copy(src, dst / name)
+
+
+def pack(model_dir, out=None, name=None, fp16: bool = True, serialize_mode="base",
+         quant="fp16") -> Path:
     """학습된 model/ 를 제출 zip 으로 패키징한다. out 미지정 시 build/<name>.zip.
 
-    serialize_mode: 추론 직렬화 프리셋(학습과 일치해야 함). script.py 가 infer_config 의
-    ``serialize`` 값을 읽어 cues 등을 켠다.
+    serialize_mode: 추론 직렬화 프리셋(학습과 일치해야 함).
+    quant: fp16(기본) | int4(bitsandbytes nf4, 큰 모델용 → requirements 에 bitsandbytes).
     """
     model_dir = Path(model_dir)
     if not model_dir.is_dir():
@@ -272,7 +296,15 @@ def pack(model_dir, out=None, name=None, fp16: bool = True, serialize_mode="base
     out.parent.mkdir(parents=True, exist_ok=True)
 
     tmp = None
-    if fp16:
+    requirements = REQUIREMENTS
+    if quant == "int4":
+        tmp = Path(tempfile.mkdtemp(prefix="pack_int4_"))
+        print(f"[int4] {model_dir} → {tmp} nf4 재저장...")
+        to_int4_dir(model_dir, tmp)
+        src_dir = tmp
+        requirements = "bitsandbytes\n"  # 4bit 추론에 필요
+        fp16 = False
+    elif fp16:
         tmp = Path(tempfile.mkdtemp(prefix="pack_fp16_"))
         print(f"[fp16] {model_dir} → {tmp} 재저장(fp16)...")
         to_fp16_dir(model_dir, tmp)
@@ -281,8 +313,8 @@ def pack(model_dir, out=None, name=None, fp16: bool = True, serialize_mode="base
         src_dir = model_dir
 
     # infer_config 에 serialize 모드 주입(추론이 학습과 같은 직렬화를 쓰도록).
-    # fp16 이면 tmp(우리 소유)에 쓰고, 아니면 tmp 를 새로 만들어 원본 훼손을 피한다.
-    if not fp16:
+    # tmp(우리 소유)면 거기에 쓰고, 원본 model_dir 이면 fresh tmp 를 만들어 훼손을 피한다.
+    if tmp is None:
         tmp = Path(tempfile.mkdtemp(prefix="pack_cfg_"))
         for p in src_dir.iterdir():
             if p.is_file():
@@ -299,7 +331,7 @@ def pack(model_dir, out=None, name=None, fp16: bool = True, serialize_mode="base
         for p in files:
             z.write(p, arcname=f"model/{p.relative_to(src_dir).as_posix()}")
         z.writestr("script.py", SCRIPT_PY)
-        z.writestr("requirements.txt", REQUIREMENTS)
+        z.writestr("requirements.txt", requirements)
     if tmp is not None:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -364,6 +396,8 @@ def main() -> None:
     pp.add_argument("--no-fp16", action="store_true")
     pp.add_argument("--serialize", default="base",
                     help="추론 직렬화 프리셋(학습과 일치). cues 등")
+    pp.add_argument("--quant", default="fp16", choices=["fp16", "int4"],
+                    help="int4 = bitsandbytes nf4(큰 모델 1GB 대응)")
 
     pe = sub.add_parser("eval", help="제출 전 로컬 검증(평가 서버 모사)")
     pe.add_argument("--zip", required=True)
@@ -372,7 +406,7 @@ def main() -> None:
     args = ap.parse_args()
     if args.cmd == "pack":
         pack(args.model_dir, out=args.out, name=args.name, fp16=not args.no_fp16,
-             serialize_mode=args.serialize)
+             serialize_mode=args.serialize, quant=args.quant)
     elif args.cmd == "eval":
         local_eval(args.zip, data=args.data)
 
