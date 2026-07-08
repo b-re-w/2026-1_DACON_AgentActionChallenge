@@ -45,13 +45,30 @@ FOLDS_CSV = DATA_DIR / "folds.csv"
 # --------------------------------------------------------------------------- #
 # 모델 / 토크나이저
 # --------------------------------------------------------------------------- #
-def build_tokenizer(model_name: str):
-    """토크나이저 로드 + pad 토큰(디코더용) + 섹션 특수 토큰 추가."""
+def build_tokenizer(model_name: str, add_special: bool = True):
+    """토크나이저 로드 + pad 토큰(디코더용) + (선택) 섹션 특수 토큰 추가.
+
+    add_special=False 는 QLoRA 경로용 — 4bit 고정 임베딩에 새 토큰 행을 학습시키지
+    않기 위해 special token 을 붙이지 않는다(섹션 마커는 서브워드로 처리).
+    """
     tok = AutoTokenizer.from_pretrained(model_name)
     if tok.pad_token is None:  # Qwen 등 디코더는 pad 토큰이 없음
         tok.pad_token = tok.eos_token
-    tok.add_special_tokens({"additional_special_tokens": SPECIAL_TOKENS})
+    if add_special:
+        tok.add_special_tokens({"additional_special_tokens": SPECIAL_TOKENS})
     return tok
+
+
+def _propagate_pad_token(model, tokenizer):
+    """pad_token_id 를 config + 중첩 config 에 전파 (Qwen 등 디코더/멀티모달 대응)."""
+    if model.config.pad_token_id is None:
+        model.config.pad_token_id = tokenizer.pad_token_id
+    # 멀티모달/중첩 config(예: qwen3_5 는 text_config·vision_config 보유) 에서는
+    # seq-cls forward 가 하위 text_config.pad_token_id 를 읽으므로 거기에도 전파한다.
+    for sub_name in ("text_config", "llm_config", "language_config"):
+        sub = getattr(model.config, sub_name, None)
+        if sub is not None and getattr(sub, "pad_token_id", None) is None:
+            sub.pad_token_id = model.config.pad_token_id
 
 
 def build_model(model_name: str, tokenizer, grad_checkpoint: bool = False):
@@ -63,16 +80,54 @@ def build_model(model_name: str, tokenizer, grad_checkpoint: bool = False):
         label2id=dict(CLASS_TO_ID),
     )
     model.resize_token_embeddings(len(tokenizer))
-    if model.config.pad_token_id is None:
-        model.config.pad_token_id = tokenizer.pad_token_id
-    # 멀티모달/중첩 config(예: qwen3_5 는 text_config·vision_config 보유) 에서는
-    # seq-cls forward 가 하위 text_config.pad_token_id 를 읽으므로 거기에도 전파한다.
-    for sub_name in ("text_config", "llm_config", "language_config"):
-        sub = getattr(model.config, sub_name, None)
-        if sub is not None and getattr(sub, "pad_token_id", None) is None:
-            sub.pad_token_id = model.config.pad_token_id
+    _propagate_pad_token(model, tokenizer)
     if grad_checkpoint:
         model.config.use_cache = False
+    return model
+
+
+# LoRA 기본 대상 — Qwen2.5/Llama-3/Gemma-2 계열 공통 proj 이름.
+QLORA_TARGET_MODULES = ["q_proj", "k_proj", "v_proj", "o_proj",
+                        "gate_proj", "up_proj", "down_proj"]
+
+
+def build_qlora_model(model_name: str, tokenizer, *, lora_r: int = 16,
+                      lora_alpha: int = 32, lora_dropout: float = 0.05,
+                      target_modules=None, grad_checkpoint: bool = False):
+    """대형 teacher 용 QLoRA 모델: 4bit(nf4) 고정 base + 학습가능 LoRA 어댑터.
+
+    핵심: seq-cls 의 ``score`` head 는 새로 초기화되므로 **반드시 학습·저장**해야 한다
+    (modules_to_save=["score"]). 이걸 빠뜨리면 base 는 잘 학습돼도 head 가 랜덤이라
+    soft-label 이 전부 노이즈가 된다.
+
+    special token 은 붙이지 않는다(build_tokenizer(add_special=False) 로 호출) — 4bit
+    고정 임베딩에 새 행을 학습시키지 않기 위해서다. 섹션 마커([META] 등)는 일반
+    서브워드로 토크나이즈되어 그대로 작동한다(표현이 base teacher 와 약간 달라 앙상블
+    다양성에도 기여).
+    """
+    import torch
+    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+    from transformers import BitsAndBytesConfig
+
+    bnb = BitsAndBytesConfig(
+        load_in_4bit=True, bnb_4bit_quant_type="nf4",
+        bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=torch.bfloat16,
+    )
+    model = AutoModelForSequenceClassification.from_pretrained(
+        model_name, num_labels=NUM_CLASSES,
+        id2label={i: c for i, c in ID_TO_CLASS.items()}, label2id=dict(CLASS_TO_ID),
+        quantization_config=bnb, torch_dtype=torch.bfloat16, device_map={"": 0},
+    )
+    _propagate_pad_token(model, tokenizer)
+    model.config.use_cache = False
+    model = prepare_model_for_kbit_training(
+        model, use_gradient_checkpointing=grad_checkpoint)
+    lora = LoraConfig(
+        task_type="SEQ_CLS", r=lora_r, lora_alpha=lora_alpha, lora_dropout=lora_dropout,
+        target_modules=target_modules or QLORA_TARGET_MODULES, modules_to_save=["score"],
+    )
+    model = get_peft_model(model, lora)
+    model.print_trainable_parameters()
     return model
 
 
@@ -239,13 +294,18 @@ def write_metrics(out_dir, payload: dict) -> None:
 
 
 @torch.inference_mode()
-def predict_logits(model_dir, samples, max_length: int = 512, batch_size: int = 128,
-                   serialize_kwargs=None):
-    """저장된 모델로 샘플들의 14-class logits 계산 (길이정렬 배칭).
+def measure_inference_latency(model_dir, samples, max_length: int = 512, batch_size: int = 128,
+                              serialize_kwargs=None, warmup_batches: int = 2):
+    """제출 추론경로(길이정렬 배칭 + half)와 동일한 방식으로 추론 지연을 측정.
 
-    tune_threshold(OOF logits)·distill(teacher soft-label) 이 공유한다.
-    serialize_kwargs: 직렬화 프리셋(teacher/student 입력 일치가 중요).
+    반환: {n, total_s, ms_per_sample, proj_30k_s, device, batch_size}.
+    로컬 GPU(예: A100) 기준 상대지표 — 제출 환경(T4)의 절대값과는 다르지만, 모델·입력
+    프리셋 간 **상대 비교**(base vs rich 등)에 쓴다. proj_30k_s 는 test 30k 추론 예산(10분)
+    대비 여유를 가늠하기 위한 선형 투영값.
     """
+    import gc
+    import time
+
     sk = serialize_kwargs or {}
     tok = AutoTokenizer.from_pretrained(str(model_dir))
     model = (
@@ -254,6 +314,88 @@ def predict_logits(model_dir, samples, max_length: int = 512, batch_size: int = 
         .half()
         .eval()
     )
+    texts = [serialize_sample(s, **sk) for s in samples]
+    order = sorted(range(len(texts)), key=lambda i: len(texts[i]))
+    batches = [order[st : st + batch_size] for st in range(0, len(order), batch_size)]
+
+    def _run(chunk):
+        enc = tok(
+            [texts[i] for i in chunk],
+            truncation=True, max_length=max_length, padding=True, return_tensors="pt",
+        ).to("cuda")
+        model(**enc)
+
+    for chunk in batches[:warmup_batches]:  # warmup (커널 컴파일·캐시)
+        _run(chunk)
+    torch.cuda.synchronize()
+    t0 = time.perf_counter()
+    for chunk in batches:
+        _run(chunk)
+    torch.cuda.synchronize()
+    elapsed = time.perf_counter() - t0
+
+    n = len(texts)
+    res = {
+        "n": n,
+        "total_s": round(elapsed, 3),
+        "ms_per_sample": round(elapsed / n * 1000.0, 3),
+        "proj_30k_s": round(elapsed / n * 30000.0, 1),
+        "device": torch.cuda.get_device_name(0),
+        "batch_size": batch_size,
+    }
+    model.cpu()
+    del model, tok
+    gc.collect()
+    torch.cuda.empty_cache()
+    return res
+
+
+def load_seqcls_model(model_dir, *, load_in_4bit: bool = False):
+    """저장된 seq-cls 모델을 추론용(eval, GPU)으로 로드.
+
+    - 일반 저장모델: fp16 로 로드해 .cuda().half().
+    - PEFT 어댑터(adapter_config.json 존재): base 를 (선택적 4bit nf4) 로드 후 어댑터
+      결합. 대형 QLoRA teacher 는 load_in_4bit=True 로 4bit base 위에서 바로 추론
+      (fp16 merge 불필요 → 70B 도 안전).
+    """
+    md = Path(model_dir)
+    if (md / "adapter_config.json").exists():
+        from peft import PeftModel
+        base = json.loads((md / "adapter_config.json").read_text())["base_model_name_or_path"]
+        kw = dict(num_labels=NUM_CLASSES,
+                  id2label={i: c for i, c in ID_TO_CLASS.items()}, label2id=dict(CLASS_TO_ID))
+        if load_in_4bit:
+            from transformers import BitsAndBytesConfig
+            kw["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=torch.bfloat16)
+            kw["device_map"] = {"": 0}
+        else:
+            kw["torch_dtype"] = torch.float16
+        base_model = AutoModelForSequenceClassification.from_pretrained(base, **kw)
+        if base_model.config.pad_token_id is None:
+            tk = AutoTokenizer.from_pretrained(str(md))
+            base_model.config.pad_token_id = tk.pad_token_id or tk.eos_token_id
+        model = PeftModel.from_pretrained(base_model, str(md))
+        if not load_in_4bit:
+            model = model.cuda()
+        return model.eval()
+    return AutoModelForSequenceClassification.from_pretrained(str(md)).cuda().half().eval()
+
+
+@torch.inference_mode()
+def predict_logits(model_dir, samples, max_length: int = 512, batch_size: int = 128,
+                   serialize_kwargs=None, load_in_4bit: bool = False):
+    """저장된 모델로 샘플들의 14-class logits 계산 (길이정렬 배칭).
+
+    tune_threshold(OOF logits)·distill(teacher soft-label)·gen_softlabels 가 공유한다.
+    serialize_kwargs: 직렬화 프리셋(teacher/student 입력 일치가 중요).
+    load_in_4bit: QLoRA 대형 teacher 어댑터를 4bit base 위에서 추론.
+    """
+    sk = serialize_kwargs or {}
+    tok = AutoTokenizer.from_pretrained(str(model_dir))
+    model = load_seqcls_model(model_dir, load_in_4bit=load_in_4bit)
+    device = next(model.parameters()).device
     texts = [serialize_sample(s, **sk) for s in samples]
     order = sorted(range(len(texts)), key=lambda i: len(texts[i]))
     out = np.zeros((len(texts), NUM_CLASSES), dtype=np.float32)
@@ -265,7 +407,7 @@ def predict_logits(model_dir, samples, max_length: int = 512, batch_size: int = 
             max_length=max_length,
             padding=True,
             return_tensors="pt",
-        ).to("cuda")
+        ).to(device)
         logit = model(**enc).logits.float().cpu().numpy()
         for pos, i in enumerate(chunk):
             out[i] = logit[pos]
@@ -279,10 +421,75 @@ def predict_logits(model_dir, samples, max_length: int = 512, batch_size: int = 
     return out
 
 
+# --------------------------------------------------------------------------- #
+# Teacher soft-label 재사용 store
+# --------------------------------------------------------------------------- #
+# teacher 1개당 **전체 train 레코드**의 14-class raw logits 를 1회 캐시한다. 이후
+# 증류(distill)는 이 store 들에서 임의의 teacher 부분집합을 sample.id 로 조회·평균해
+# 쓰므로, fold/all_data/student/α/T/앙상블조합 을 바꾸는 실험이 teacher 재추론 없이
+# 돈다. logits 는 softmax 전(raw) 이라 distill 시점의 temperature/alpha 스윕이 무료.
+#   파일: runs/_teacher_logits/{tag}.npz  (logits:(N,14) f32, ids:(N,) str)
+#         runs/_teacher_logits/{tag}.json (메타)
+# id 로 조회하므로 레코드 순서가 바뀌어도 안전 — 없는 id 는 조기 실패시킨다.
+TEACHER_LOGITS_DIR = Path("runs/_teacher_logits")
+
+
+def resolve_teacher_logits_path(tag_or_path) -> Path:
+    """bare tag('q25_3b_base') → runs/_teacher_logits/q25_3b_base.npz. .npz 경로면 그대로."""
+    p = Path(tag_or_path)
+    return p if p.suffix == ".npz" else TEACHER_LOGITS_DIR / f"{tag_or_path}.npz"
+
+
+def save_teacher_logits(tag, ids, logits, meta=None) -> Path:
+    """teacher store 저장 (전체 레코드 logits + id 인덱스 + 메타)."""
+    TEACHER_LOGITS_DIR.mkdir(parents=True, exist_ok=True)
+    path = TEACHER_LOGITS_DIR / f"{tag}.npz"
+    np.savez(path, logits=np.asarray(logits, np.float32),
+             ids=np.asarray(list(ids), dtype=object))
+    (TEACHER_LOGITS_DIR / f"{tag}.json").write_text(
+        json.dumps({"tag": tag, "n": len(logits), **(meta or {})}, indent=2),
+        encoding="utf-8",
+    )
+    return path
+
+
+def gather_teacher_logits(tags_or_paths, samples) -> np.ndarray:
+    """지정 teacher store 들을 samples 순서로 정렬·평균한 (N,14) logits 반환.
+
+    각 store 는 전체 레코드 logits 이므로 여기서 sample.id 로 조회해 현재
+    fold/all_data 하위집합만 뽑는다. 요청 id 가 store 에 없으면 조기 실패(불일치 감지).
+    """
+    if not samples:
+        return np.zeros((0, NUM_CLASSES), np.float32)
+    want = [s.id for s in samples]
+    acc = np.zeros((len(samples), NUM_CLASSES), np.float32)
+    for t in tags_or_paths:
+        path = resolve_teacher_logits_path(t)
+        if not path.exists():
+            raise FileNotFoundError(
+                f"teacher-logits store 없음: {path} — gen_softlabels 로 먼저 생성"
+            )
+        z = np.load(path, allow_pickle=True)
+        row = {rid: i for i, rid in enumerate(z["ids"].tolist())}
+        try:
+            idx = [row[i] for i in want]
+        except KeyError as e:
+            raise KeyError(
+                f"{path.name} 에 없는 레코드 id={e.args[0]} — teacher store 가 현재 "
+                f"데이터와 불일치(재생성 필요)"
+            ) from None
+        acc += z["logits"][idx]
+    acc /= len(tags_or_paths)
+    return acc
+
+
 __all__ = [
     "DATA_DIR", "TRAIN_JSONL", "TRAIN_LABELS", "FOLDS_CSV",
     "build_tokenizer", "build_model", "load_train_records", "get_folds",
     "build_datasets", "compute_metrics", "compute_class_weights",
     "build_training_args", "WeightedTrainer",
     "save_submission_model", "write_oof", "write_metrics", "predict_logits",
+    "measure_inference_latency", "load_seqcls_model", "build_qlora_model",
+    "TEACHER_LOGITS_DIR", "resolve_teacher_logits_path",
+    "save_teacher_logits", "gather_teacher_logits",
 ]

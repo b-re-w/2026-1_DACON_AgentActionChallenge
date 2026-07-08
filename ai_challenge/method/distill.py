@@ -14,6 +14,8 @@ KD loss = alpha * CE(hard) + (1-alpha) * T^2 * KL(student/T || teacher/T)
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 from pathlib import Path
 
 import numpy as np
@@ -37,6 +39,8 @@ from ai_challenge.models.common import (
     build_tokenizer,
     build_training_args,
     compute_metrics,
+    gather_teacher_logits,
+    measure_inference_latency,
     predict_logits,
     save_submission_model,
     write_metrics,
@@ -103,8 +107,13 @@ class KDTrainer(Trainer):
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--teacher-dir", required=True, nargs="+",
-                    help="teacher model 디렉터리(들). 여러 개면 soft-label 평균(앙상블).")
+    ap.add_argument("--teacher-dir", nargs="+", default=None,
+                    help="teacher model 디렉터리(들). 여러 개면 soft-label 평균(앙상블). "
+                         "매번 teacher forward 발생.")
+    ap.add_argument("--teacher-logits", nargs="+", default=None,
+                    help="gen_softlabels 로 만든 재사용 store 태그/경로(들). 여러 개면 "
+                         "부분집합 평균(앙상블). teacher forward 0회 → 빠른 스윕. "
+                         "--teacher-dir 와 택일.")
     ap.add_argument("--student", default="Qwen/Qwen2.5-0.5B")
     ap.add_argument("--out", required=True)
     ap.add_argument("--val-fold", type=int, default=0)
@@ -120,9 +129,18 @@ def main() -> None:
     ap.add_argument("--grad-checkpoint", action="store_true")
     ap.add_argument("--all-data", action="store_true")
     ap.add_argument("--serialize", default="base", choices=list(SERIALIZE_PRESETS),
-                    help="입력 직렬화 프리셋 (teacher soft-label·student 입력 모두 적용)")
+                    help="student 입력 직렬화 프리셋 (teacher 미지정 시 teacher soft-label 에도 동일 적용)")
+    ap.add_argument("--teacher-serialize", default=None, choices=list(SERIALIZE_PRESETS),
+                    help="teacher soft-label 생성 전용 프리셋. 미지정 시 --serialize 와 동일(기존 동작). "
+                         "예: --teacher-serialize rich --serialize base → rich teacher → base student(비대칭 KD).")
     args = ap.parse_args()
-    sk = SERIALIZE_PRESETS[args.serialize]
+    if not args.teacher_dir and not args.teacher_logits:
+        ap.error("--teacher-dir 또는 --teacher-logits 중 하나는 필요합니다")
+    if args.teacher_dir and args.teacher_logits:
+        ap.error("--teacher-dir 와 --teacher-logits 는 동시 사용 불가")
+    sk = SERIALIZE_PRESETS[args.serialize]                       # student 입력
+    t_serialize = args.teacher_serialize or args.serialize
+    sk_teacher = SERIALIZE_PRESETS[t_serialize]                  # teacher soft-label 입력
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -137,23 +155,54 @@ def main() -> None:
         val_samples = [s for s, f in zip(records, fold) if f == args.val_fold]
     print(f"[data] train={len(train_samples)} val={len(val_samples)}", flush=True)
 
-    # teacher soft-label 캐시 (train/val 각각) — 공통 predict_logits 사용
-    cache = out / "teacher_cache.npz"
-    if cache.exists():
-        z = np.load(cache)
-        tl_train, tl_val = z["train"], z["val"]
-        print("[teacher] cache 사용", flush=True)
+    # teacher soft-label 확보 — 두 경로:
+    #  (A) --teacher-logits: gen_softlabels 로 만든 재사용 store 에서 teacher 부분집합을
+    #      id 기준으로 조회·평균. teacher forward 0회 → α/T/student/앙상블조합 스윕이 즉시.
+    #  (B) --teacher-dir: 기존 방식(모델 로드 후 forward). 결과는 아래 공유 캐시에 저장.
+    if args.teacher_logits:
+        print(f"[teacher] 재사용 store {args.teacher_logits} 에서 soft-label 로드 "
+              f"(teacher forward 없음)", flush=True)
+        tl_train = gather_teacher_logits(args.teacher_logits, train_samples)
+        tl_val = gather_teacher_logits(args.teacher_logits, val_samples)
     else:
-        print(f"[teacher] soft-label 생성 ({len(args.teacher_dir)}개 teacher 평균)...", flush=True)
-        tl_train = np.zeros((len(train_samples), NUM_CLASSES), np.float32)
-        tl_val = np.zeros((len(val_samples), NUM_CLASSES), np.float32)
-        for td in args.teacher_dir:
-            tl_train += predict_logits(td, train_samples, max_length=args.max_length, serialize_kwargs=sk)
-            if val_samples:
-                tl_val += predict_logits(td, val_samples, max_length=args.max_length, serialize_kwargs=sk)
-        tl_train /= len(args.teacher_dir)  # logit 평균(앙상블)
-        tl_val /= len(args.teacher_dir)
-        np.savez(cache, train=tl_train, val=tl_val)
+        # teacher soft-label 공유 캐시 — teacher soft-label 은 (teacher 모델들 × teacher 입력
+        # 프리셋 × fold × all_data × max_length) 에만 의존하고 student·α·T 와 무관하므로,
+        # 이 키로 runs/_softlabels/ 에 저장해 다른 student/하이퍼 실험이 자동 재사용한다.
+        cache_key = "|".join([
+            ",".join(sorted(args.teacher_dir)),
+            f"ser={t_serialize}", f"fold={args.val_fold}",
+            f"all={int(args.all_data)}", f"ml={args.max_length}",
+        ])
+        digest = hashlib.md5(cache_key.encode()).hexdigest()[:16]
+        shared_dir = Path("runs/_softlabels")
+        shared_dir.mkdir(parents=True, exist_ok=True)
+        cache = shared_dir / f"{digest}.npz"
+        legacy = out / "teacher_cache.npz"  # 이전 per-out 캐시 하위호환
+        src = cache if cache.exists() else (legacy if legacy.exists() else None)
+        if src is not None:
+            z = np.load(src)
+            tl_train, tl_val = z["train"], z["val"]
+            print(f"[teacher] soft-label 캐시 재사용: {src}", flush=True)
+            if not cache.exists():  # legacy → 공유 위치로 승격
+                np.savez(cache, train=tl_train, val=tl_val)
+        else:
+            print(f"[teacher] soft-label 생성 ({len(args.teacher_dir)}개 teacher 평균, "
+                  f"serialize={t_serialize}) → 저장 {cache}", flush=True)
+            tl_train = np.zeros((len(train_samples), NUM_CLASSES), np.float32)
+            tl_val = np.zeros((len(val_samples), NUM_CLASSES), np.float32)
+            for td in args.teacher_dir:
+                tl_train += predict_logits(td, train_samples, max_length=args.max_length, serialize_kwargs=sk_teacher)
+                if val_samples:
+                    tl_val += predict_logits(td, val_samples, max_length=args.max_length, serialize_kwargs=sk_teacher)
+            tl_train /= len(args.teacher_dir)  # logit 평균(앙상블)
+            tl_val /= len(args.teacher_dir)
+            np.savez(cache, train=tl_train, val=tl_val)
+            (shared_dir / f"{digest}.json").write_text(
+                json.dumps({"key": cache_key, "teacher_dir": args.teacher_dir,
+                            "teacher_serialize": t_serialize, "val_fold": args.val_fold,
+                            "all_data": args.all_data, "max_length": args.max_length}, indent=2),
+                encoding="utf-8",
+            )
     if val_samples:
         yv = np.array([CLASS_TO_ID[s.action] for s in val_samples])
         print(f"[teacher] val argmax macro_f1 = {f1_score(yv, tl_val.argmax(1), average='macro'):.4f}", flush=True)
@@ -176,7 +225,7 @@ def main() -> None:
         temperature=args.temperature, alpha=args.alpha,
     )
     trainer.train()
-    save_submission_model(trainer, tok, out, args.max_length)
+    model_dir = save_submission_model(trainer, tok, out, args.max_length)
 
     if args.all_data:
         print(f"[done] all-data KD 학습 완료 -> {out}/model", flush=True)
@@ -184,11 +233,24 @@ def main() -> None:
 
     metrics = trainer.evaluate()
     print(f"[eval] {metrics}", flush=True)
+
+    # 추론시간 측정 — student 입력(sk)으로 제출 추론경로와 동일 배칭. 제출 속도 배점 대비용.
+    latency = measure_inference_latency(
+        model_dir, val_samples, max_length=args.max_length, serialize_kwargs=sk,
+    )
+    print(f"[latency] {latency['ms_per_sample']:.3f} ms/sample, "
+          f"30k 투영 {latency['proj_30k_s']:.1f}s ({latency['device']}, n={latency['n']})", flush=True)
+
     write_metrics(out, {
-        "student": args.student, "teacher": args.teacher_dir, "val_fold": args.val_fold,
+        "student": args.student, "teacher": args.teacher_dir or args.teacher_logits,
+        "teacher_source": "logits_store" if args.teacher_logits else "model_dir",
+        "val_fold": args.val_fold,
         "temperature": args.temperature, "alpha": args.alpha,
+        "serialize": args.serialize,
+        "teacher_serialize": ("store" if args.teacher_logits else t_serialize),
         "macro_f1": float(metrics.get("eval_macro_f1", 0.0)),
         "acc": float(metrics.get("eval_acc", 0.0)),
+        "latency": latency,
     })
     print(f"[done] student KD macro_f1={metrics.get('eval_macro_f1'):.4f} -> {out}/model", flush=True)
 

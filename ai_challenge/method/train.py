@@ -12,13 +12,14 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from transformers import DataCollatorWithPadding
+from transformers import DataCollatorWithPadding, EarlyStoppingCallback
 
 from ai_challenge.datasets import SERIALIZE_PRESETS
 from ai_challenge.models.common import (
     WeightedTrainer,
     build_datasets,
     build_model,
+    build_qlora_model,
     build_tokenizer,
     build_training_args,
     compute_class_weights,
@@ -63,7 +64,22 @@ def main() -> None:
                     help="FSDP 샤딩 (예: 'full_shard auto_wrap'). torchrun --nproc_per_node=N 로 실행. 대형(14B) 다중 GPU용")
     ap.add_argument("--fsdp-layer-cls", default="Qwen2DecoderLayer",
                     help="FSDP auto_wrap 대상 트랜스포머 레이어 클래스명")
+    ap.add_argument("--qlora", action="store_true",
+                    help="대형 teacher 를 4bit(nf4) + LoRA 로 단일 GPU 학습(peft). score head 는 "
+                         "full-train. special token 미사용. distill teacher soft-label 생성용.")
+    ap.add_argument("--lora-r", type=int, default=16)
+    ap.add_argument("--lora-alpha", type=int, default=32)
+    ap.add_argument("--lora-dropout", type=float, default=0.05)
+    ap.add_argument("--early-stop-patience", type=int, default=0,
+                    help="0=끔. >0 이면 매 epoch in-loop eval(macro_f1) 후 patience epoch "
+                         "개선 없으면 조기중단 + best epoch 복원. --epochs 는 상한이 된다. "
+                         "(in-loop eval 이 필요하므로 --manual-oof 를 무시하고 강제로 켬)")
     args = ap.parse_args()
+
+    # early stopping 은 매 epoch 검증 지표가 필요 → in-loop eval 강제(manual-oof 와 상호배타).
+    use_inloop_eval = (not args.manual_oof) or (args.early_stop_patience > 0)
+    if args.early_stop_patience > 0 and args.manual_oof:
+        print("[warn] --early-stop-patience 사용 → --manual-oof 무시(in-loop eval 켬)", flush=True)
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -71,7 +87,8 @@ def main() -> None:
 
     records = load_train_records()
     fold = get_folds(records)
-    tok = build_tokenizer(args.model)
+    # QLoRA 는 4bit 고정 임베딩에 새 토큰을 학습시키지 않으려고 special token 을 붙이지 않는다.
+    tok = build_tokenizer(args.model, add_special=not args.qlora)
     train_ds, val_ds = build_datasets(
         records, fold, tok, args.max_length,
         val_fold=args.val_fold, all_data=args.all_data,
@@ -81,21 +98,32 @@ def main() -> None:
 
     class_weights = None if args.no_class_weight else compute_class_weights(train_ds.samples)
 
-    model = build_model(args.model, tok, grad_checkpoint=args.grad_checkpoint)
+    if args.qlora:
+        model = build_qlora_model(
+            args.model, tok, lora_r=args.lora_r, lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout, grad_checkpoint=args.grad_checkpoint,
+        )
+    else:
+        model = build_model(args.model, tok, grad_checkpoint=args.grad_checkpoint)
     targs = build_training_args(
         out, epochs=args.epochs, batch_size=args.batch_size, lr=args.lr,
         grad_accum=args.grad_accum, warmup_ratio=args.warmup_ratio,
         weight_decay=args.weight_decay, bf16=args.bf16, num_workers=args.num_workers,
-        grad_checkpoint=args.grad_checkpoint, all_data=args.all_data,
+        # QLoRA 는 grad-ckpt 를 prepare_model_for_kbit_training 에서 처리하므로
+        # TrainingArguments 쪽은 끈다(이중 적용 방지).
+        grad_checkpoint=args.grad_checkpoint and not args.qlora, all_data=args.all_data,
         seed=args.seed, optim=args.optim,
         remove_unused_columns=not args.keep_columns,
-        inloop_eval=not args.manual_oof,
+        inloop_eval=use_inloop_eval,
         fsdp=args.fsdp, fsdp_layer_cls=args.fsdp_layer_cls,
     )
+    callbacks = ([EarlyStoppingCallback(early_stopping_patience=args.early_stop_patience)]
+                 if args.early_stop_patience > 0 else None)
     trainer = WeightedTrainer(
         model=model, args=targs, train_dataset=train_ds, eval_dataset=val_ds,
         data_collator=DataCollatorWithPadding(tok),
         compute_metrics=compute_metrics, class_weights=class_weights,
+        callbacks=callbacks,
     )
     trainer.train()
     model_dir = save_submission_model(trainer, tok, out, args.max_length)
@@ -104,7 +132,7 @@ def main() -> None:
         print(f"[done] all-data 학습 완료 -> {out}/model", flush=True)
         return
 
-    if args.manual_oof:
+    if not use_inloop_eval:
         # transformers 5.x eval 루프 우회: 저장된 모델을 predict_logits 로 재추론해 OOF 산출
         from sklearn.metrics import accuracy_score, f1_score
 
@@ -113,7 +141,8 @@ def main() -> None:
 
         val_samples = val_ds.samples
         logits = predict_logits(str(model_dir), val_samples, max_length=args.max_length,
-                                serialize_kwargs=SERIALIZE_PRESETS[args.serialize])
+                                serialize_kwargs=SERIALIZE_PRESETS[args.serialize],
+                                load_in_4bit=args.qlora)
         preds = logits.argmax(-1)
         y = [CLASS_TO_ID[s.action] for s in val_samples]
         macro = f1_score(y, preds, average="macro")
