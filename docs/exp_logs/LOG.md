@@ -29,3 +29,9 @@
 | 2026-07-06 | speculative_team | Qwen3 라운드 — teacher·student 전부 미달/동률 | q3_4b_teacher=0.7727, q3_1.7b_teacher=0.7702, qwen2.5_3b_teacher=0.7745, q3_0.6b_student=0.7794, gemma3_270m_student=0.7763, qwen2.5_0.5b_student=0.779 | [로그](speculative_team/2026-07-06.md) |
 | 2026-07-06 | speculative_team | 다양성 앙상블 제출 → LB 0.78621 (최고 갱신) | lb=0.78621, fold0_oof=0.7816, prev_best_lb=0.78519, delta=+0.001 | [로그](speculative_team/2026-07-06.md) |
 | 2026-07-06 | others | 대형 teacher·5.x·FSDP 환경 제약 정리 | qwen7b=진행중, 14b_fsdp=PCIe 146h 비현실적, claude4b=0.7719, gpt5_4b=0.7741, r1_7b=0.7655 | [로그](others/2026-07-06.md) |
+| 2026-07-08 | speculative_team | KD 그리드 완성 — rich teacher → base student (비대칭) | richT_baseS_oof=0.7757, latency_ms_per_sample=2.789, proj_30k_s=83.7, base_KD_ref=0.7801, baseT_richS=0.778, richT_richS=0.7747, teacher_val_argmax=0.7681 | [로그](speculative_team/2026-07-08.md) |
+| 2026-07-08 | others | max_length 512→640 (잘림 제거) — 타깃 +24%p지만 전체 무이동 | ml640_oof=0.7802, ml512_oof_ref=0.7801, trunc111_acc_512=0.5495, trunc111_acc_640=0.7928, trunc_delta=0.2432, trunc_rate=0.0079, proj_30k_s_640=80.1, proj_30k_s_512=90.1, teacher_argmax_512=0.7745, teacher_argmax_640=0.7766 | [로그](others/2026-07-08.md) |
+| 2026-07-09 | others | QLoRA 대형 teacher 사다리 + 재사용 store — 크기↑ 무익 | t3b_qlora=0.7639, t14b_qlora=0.7651, student_3b=0.7747, student_14b=0.7732, store_MB=6.5 | [로그](others/2026-07-09.md) |
+| 2026-07-09 | others | 단일-student 레버 총점검 — 전부 실패(앙상블만 생존) | threshold_q3b_student=-0.0019, threshold_w6_student=-0.0030, dkd=0.7633(vanilla 0.7747), cues=하락 | [로그](others/2026-07-09.md) |
+| 2026-07-09 | others | 이질 teacher(GLM 격리env) + 서버 tooling + 제출 | glm4_32b=격리4.55, submit_q3b_all_lb=0.781638, best_w6=0.787396, hetero_tooling=train_hetero.sh | [로그](others/2026-07-09.md) |
+| 2026-07-09 | others | feature engineering(CUES) 재검토 — OOF·LB 둘 다 하락 | cues_teacher_oof=0.7693(base 0.7745), cues_student_lb=0.782716(w6 0.787396) | [로그](feature_engineering.md) |
