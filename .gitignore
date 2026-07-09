@@ -193,3 +193,6 @@ trainer_output/
 # AI Agent
 .claude
 .omc
+
+# 대회 원본 데이터 압축본 (커밋 금지)
+open.zip
