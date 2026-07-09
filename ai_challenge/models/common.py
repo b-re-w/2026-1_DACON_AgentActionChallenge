@@ -93,7 +93,8 @@ QLORA_TARGET_MODULES = ["q_proj", "k_proj", "v_proj", "o_proj",
 
 def build_qlora_model(model_name: str, tokenizer, *, lora_r: int = 16,
                       lora_alpha: int = 32, lora_dropout: float = 0.05,
-                      target_modules=None, grad_checkpoint: bool = False):
+                      target_modules=None, grad_checkpoint: bool = False,
+                      attn_implementation=None):
     """대형 teacher 용 QLoRA 모델: 4bit(nf4) 고정 base + 학습가능 LoRA 어댑터.
 
     핵심: seq-cls 의 ``score`` head 는 새로 초기화되므로 **반드시 학습·저장**해야 한다
@@ -113,11 +114,14 @@ def build_qlora_model(model_name: str, tokenizer, *, lora_r: int = 16,
         load_in_4bit=True, bnb_4bit_quant_type="nf4",
         bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=torch.bfloat16,
     )
-    model = AutoModelForSequenceClassification.from_pretrained(
-        model_name, num_labels=NUM_CLASSES,
+    fp_kwargs = dict(
+        num_labels=NUM_CLASSES,
         id2label={i: c for i, c in ID_TO_CLASS.items()}, label2id=dict(CLASS_TO_ID),
         quantization_config=bnb, torch_dtype=torch.bfloat16, device_map={"": 0},
     )
+    if attn_implementation:  # Gemma-2 는 soft-capping 때문에 'eager' 권장
+        fp_kwargs["attn_implementation"] = attn_implementation
+    model = AutoModelForSequenceClassification.from_pretrained(model_name, **fp_kwargs)
     _propagate_pad_token(model, tokenizer)
     model.config.use_cache = False
     model = prepare_model_for_kbit_training(
