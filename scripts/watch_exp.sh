@@ -7,7 +7,7 @@ for m in 14 32 72; do
   met=runs/t${m}b_qlora/metrics.json
   printf "── %sB ──\n" "$m"
   if [ -f "$met" ]; then
-    printf "  DONE  OOF macro_f1=%s\n" "$(grep -oE "\"macro_f1\": [0-9.]+" "$met" | grep -oE "[0-9.]+")"
+    printf "  DONE  OOF macro_f1=%s\n" "$(grep -oE "\"macro_f1\": [0-9.]+" "$met" | grep -oE "[0-9]+\.[0-9]+")"
   elif [ -f "$log" ]; then
     grep -oE "Downloading shards: +[0-9]+%|Loading checkpoint shards: +[0-9]+%|[0-9]+/[0-9]+ \[[0-9:]+<[^]]+\]" "$log" | tail -1 | sed "s/^/  진행: /"
     grep -oE "eval_macro_f1: [0-9.]+|.loss.: [0-9.]+" "$log" | tail -1 | sed "s/^/  최근: /"
