@@ -200,6 +200,16 @@ def main():
             model.half()
     id2label = model.config.id2label
 
+    # per-class bias(threshold) — bias.json 있으면 (logits+bias) argmax 로 macro-F1 최적화.
+    # 없으면 기존 argmax 그대로(하위호환). tune_threshold.py 산출물.
+    bias_t = None
+    _bias_path = os.path.join(MODEL_DIR, "bias.json")
+    if os.path.exists(_bias_path):
+        _b = json.load(open(_bias_path)).get("bias")
+        if _b is not None:
+            bias_t = torch.tensor(_b, dtype=torch.float32, device=device)
+            print(f"[bias] per-class bias 적용 (bias.json)")
+
     samples = load_jsonl(TEST_PATH)
     ids = [s.get("id", "") for s in samples]
     texts = [serialize(s, prompt_limit=max_length, include_cues=include_cues,
@@ -216,7 +226,10 @@ def main():
             batch = [texts[i] for i in chunk]
             enc = tok(batch, truncation=True, max_length=max_length,
                       padding=True, return_tensors="pt").to(device)
-            idx = model(**enc).logits.argmax(-1).tolist()
+            logits = model(**enc).logits
+            if bias_t is not None:
+                logits = logits + bias_t.to(logits.dtype)
+            idx = logits.argmax(-1).tolist()
             for pos, i in enumerate(chunk):
                 preds_by_idx[i] = id2label[idx[pos]]
     pred_map = dict(zip(ids, preds_by_idx))
