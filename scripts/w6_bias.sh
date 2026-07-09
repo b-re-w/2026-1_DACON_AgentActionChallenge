@@ -31,13 +31,19 @@ CUDA_VISIBLE_DEVICES=$GPU uv run python -m ai_challenge.method.distill \
   --val-fold 0 --bf16 --temperature 3 --alpha 0.25 --max-length $ML --serialize $SER \
   >> "$LOG" 2>&1
 
-say "3) bias 튜닝 (fold0 student OOF → coordinate ascent → bias.json)"
-CUDA_VISIBLE_DEVICES=$GPU uv run python -m ai_challenge.method.tune_threshold \
-  --model-dir runs/kd_w6_f0/model --val-fold 0 --max-length $ML >> "$LOG" 2>&1
+say "3) bias 튜닝 (fold0 student OOF → coordinate ascent). held-out 이득 확인 후 적용."
+TUNE_OUT=$(CUDA_VISIBLE_DEVICES=$GPU uv run python -m ai_challenge.method.tune_threshold \
+  --model-dir runs/kd_w6_f0/model --val-fold 0 --max-length $ML 2>&1)
+echo "$TUNE_OUT" | grep -E "base|tuned|saved" | tee -a "$LOG"
+b=$(echo "$TUNE_OUT" | grep -oE "base=[0-9.]+" | tail -1 | cut -d= -f2)
+t=$(echo "$TUNE_OUT" | grep -oE "tuned=[0-9.]+" | tail -1 | cut -d= -f2)
 
-say "4) bias.json 을 제출 모델(kd_w6_all/model)에 복사"
-cp runs/kd_w6_f0/model/bias.json runs/kd_w6_all/model/bias.json
-say "완료 ✅  runs/kd_w6_all/model/bias.json"
-say "다음(수동): pack --model-dir runs/kd_w6_all/model --name submit_w6_bias --serialize base"
-say "           → local eval → submission submit (슬롯 1개)"
-grep -oE "base.*macro_f1.*|tuned.*|\[saved\].*" "$LOG" | tail -4
+# 4. held-out 이득이 유의미(>+0.001)할 때만 제출 모델에 적용.
+#    KD student 는 이미 캘리브레이션돼 이득이 없거나 음수일 수 있음(kd_q3b: -0.0019).
+if [ -n "$b" ] && [ -n "$t" ] && awk "BEGIN{exit !($t > $b + 0.001)}"; then
+  cp runs/kd_w6_f0/model/bias.json runs/kd_w6_all/model/bias.json
+  say "4) held-out $b→$t (양의 이득) → 제출 모델에 bias 적용 ✅ → pack+재제출 검토 가치."
+  say "   다음(수동): pack --model-dir runs/kd_w6_all/model --name submit_w6_bias --serialize base → submit"
+else
+  say "4) held-out $b→$t (이득 미미/음수) → bias 미적용. threshold 는 이 모델엔 무익."
+fi
