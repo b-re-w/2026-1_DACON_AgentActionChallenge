@@ -83,11 +83,41 @@ class KDCollator:
         return batch
 
 
+def dkd_loss(s, t, labels, T, dkd_alpha, dkd_beta):
+    """Decoupled KD (Zhao et al. 2022): KL 을 TCKD(정답 vs 비정답 이분) + NCKD(비정답 분포)로 분리.
+
+    NCKD 가 dark knowledge 의 핵심(teacher 과확신 완화)이라 dkd_beta 로 강하게 준다.
+    이 태스크의 병목(탐색도구 4개 상호 애매성)이 비정답 클래스 구조라 NCKD 강화가 직접 공략.
+    """
+    gt = F.one_hot(labels, num_classes=s.size(1)).bool()   # (B,C) 정답 마스크
+    other = ~gt
+    ps = F.softmax(s / T, dim=1)
+    pt = F.softmax(t / T, dim=1)
+
+    # TCKD: [정답확률, 비정답합] 2-class 이분 분포의 KL
+    def binmask(p):
+        return torch.cat([(p * gt).sum(1, keepdim=True),
+                          (p * other).sum(1, keepdim=True)], dim=1)
+    bs, bt = binmask(ps), binmask(pt)
+    tckd = F.kl_div(bs.clamp_min(1e-8).log(), bt, reduction="batchmean") * (T * T)
+
+    # NCKD: 정답 클래스를 마스킹(-1000) 후 비정답끼리 재정규화한 분포의 KL
+    t_nc = F.softmax(t / T - 1000.0 * gt, dim=1)
+    s_nc = F.log_softmax(s / T - 1000.0 * gt, dim=1)
+    nckd = F.kl_div(s_nc, t_nc, reduction="batchmean") * (T * T)
+
+    return dkd_alpha * tckd + dkd_beta * nckd
+
+
 class KDTrainer(Trainer):
-    def __init__(self, *args, temperature=3.0, alpha=0.5, **kwargs):
+    def __init__(self, *args, temperature=3.0, alpha=0.5,
+                 dkd=False, dkd_alpha=1.0, dkd_beta=8.0, **kwargs):
         super().__init__(*args, **kwargs)
         self.T = temperature
         self.alpha = alpha
+        self.dkd = dkd
+        self.dkd_alpha = dkd_alpha
+        self.dkd_beta = dkd_beta
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         teacher = inputs.pop("teacher_logits")
@@ -96,11 +126,15 @@ class KDTrainer(Trainer):
         s = out.logits
         ce = F.cross_entropy(s, labels)
         T = self.T
-        kd = F.kl_div(
-            F.log_softmax(s / T, dim=-1),
-            F.softmax(teacher.to(s.device) / T, dim=-1),
-            reduction="batchmean",
-        ) * (T * T)
+        t = teacher.to(s.device)
+        if self.dkd:
+            kd = dkd_loss(s, t, labels, T, self.dkd_alpha, self.dkd_beta)
+        else:
+            kd = F.kl_div(
+                F.log_softmax(s / T, dim=-1),
+                F.softmax(t / T, dim=-1),
+                reduction="batchmean",
+            ) * (T * T)
         loss = self.alpha * ce + (1.0 - self.alpha) * kd
         return (loss, out) if return_outputs else loss
 
@@ -124,6 +158,10 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=2e-5)
     ap.add_argument("--temperature", type=float, default=3.0)
     ap.add_argument("--alpha", type=float, default=0.5, help="CE 가중(나머지는 KD)")
+    ap.add_argument("--dkd", action="store_true",
+                    help="Decoupled KD 사용 (KL 을 TCKD+NCKD 로 분리, NCKD 강화). vanilla KD 대체.")
+    ap.add_argument("--dkd-alpha", type=float, default=1.0, help="TCKD(정답 이분) 가중")
+    ap.add_argument("--dkd-beta", type=float, default=8.0, help="NCKD(비정답 분포) 가중 — DKD 핵심 레버")
     ap.add_argument("--bf16", action="store_true")
     ap.add_argument("--num-workers", type=int, default=4)
     ap.add_argument("--grad-checkpoint", action="store_true")
@@ -223,6 +261,7 @@ def main() -> None:
         model=model, args=targs, train_dataset=train_ds, eval_dataset=val_ds,
         data_collator=KDCollator(tok), compute_metrics=compute_metrics,
         temperature=args.temperature, alpha=args.alpha,
+        dkd=args.dkd, dkd_alpha=args.dkd_alpha, dkd_beta=args.dkd_beta,
     )
     trainer.train()
     model_dir = save_submission_model(trainer, tok, out, args.max_length)
