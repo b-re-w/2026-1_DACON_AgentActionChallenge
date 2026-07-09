@@ -70,6 +70,10 @@ def main() -> None:
     ap.add_argument("--lora-r", type=int, default=16)
     ap.add_argument("--lora-alpha", type=int, default=32)
     ap.add_argument("--lora-dropout", type=float, default=0.05)
+    ap.add_argument("--lora-target-modules", default=None,
+                    help="쉼표구분 LoRA 대상 모듈. 미지정 시 기본(q/k/v/o/gate/up/down_proj — "
+                         "Qwen/Llama/Gemma/Mistral). GLM 등 다른 arch(융합 QKV·gate_up_proj)는 "
+                         "명시 필요. 예: --lora-target-modules q_proj,k_proj,v_proj,o_proj,gate_up_proj,down_proj")
     ap.add_argument("--early-stop-patience", type=int, default=0,
                     help="0=끔. >0 이면 매 epoch in-loop eval(macro_f1) 후 patience epoch "
                          "개선 없으면 조기중단 + best epoch 복원. --epochs 는 상한이 된다. "
@@ -99,9 +103,12 @@ def main() -> None:
     class_weights = None if args.no_class_weight else compute_class_weights(train_ds.samples)
 
     if args.qlora:
+        target_modules = (args.lora_target_modules.split(",")
+                          if args.lora_target_modules else None)
         model = build_qlora_model(
             args.model, tok, lora_r=args.lora_r, lora_alpha=args.lora_alpha,
-            lora_dropout=args.lora_dropout, grad_checkpoint=args.grad_checkpoint,
+            lora_dropout=args.lora_dropout, target_modules=target_modules,
+            grad_checkpoint=args.grad_checkpoint,
         )
     else:
         model = build_model(args.model, tok, grad_checkpoint=args.grad_checkpoint)
