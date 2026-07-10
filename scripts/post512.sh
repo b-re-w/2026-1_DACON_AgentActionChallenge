@@ -25,16 +25,4 @@ dist w6_14b_31   "qw6:3 q14b:1"            # 14B 저가중
 dist w6_14b_11   "qw6:1 q14b:1"            # 동등 (희석 예상 확인)
 say "--- oss+gpt5·14B 조합 요약 (기준: qw6=0.7847, w6r_oss20=0.7847, w6r_g20=0.7816) ---"
 for n in w6r_both w6r_g20oss1 w6r_oss2g1 w6_14b_51 w6_14b_31 w6_14b_11; do echo "  $n: $(grep -oE '\"macro_f1\": [0-9.]+' runs/kd_$n/metrics.json 2>/dev/null|grep -oE '[0-9.]+')"|tee -a "$LOG"; done
-
-# 2) t3b_640 학습 (님 가설: teacher 640 학습이 512보다 나은가)
-if [ ! -f runs/t3b_640/model/config.json ]; then
-  say "t3b_640 학습 (Qwen2.5-3B full-FT 640 seed42)"
-  CUDA_VISIBLE_DEVICES=$G uv run python -m ai_challenge.method.train --model Qwen/Qwen2.5-3B \
-    --serialize base --max-length 640 --lr 2e-5 --epochs 3 --batch-size 16 --grad-accum 2 \
-    --grad-checkpoint --seed 42 --bf16 --out runs/t3b_640 >runs/t3b_640.log 2>&1 || { say "t3b_640 실패"; exit 1; }
-fi
-[ -f runs/_teacher_logits/q3b640.npz ] || CUDA_VISIBLE_DEVICES=$G uv run python -m ai_challenge.method.gen_softlabels \
-  --teacher-dir runs/t3b_640/model --tag q3b640 --serialize base --max-length 640 >>"$LOG" 2>&1
-st(){ local o=runs/kd_st_$1; [ -f $o/metrics.json ]||CUDA_VISIBLE_DEVICES=$G uv run python -m ai_challenge.method.distill --teacher-logits $1 --student Qwen/Qwen2.5-0.5B --out $o --bf16 --temperature 3 --alpha 0.25 --max-length 640 --serialize base >$o.log 2>&1; grep -oE '"macro_f1": [0-9.]+' $o/metrics.json|grep -oE '[0-9.]+'; }
-say "★ teacher 640학습 → single student = $(st q3b640)  |  512학습(t3b_base) → single student = $(st q3bb5)"
 say "=== post512 완료 (제출 없음) ==="
