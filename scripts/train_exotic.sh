@@ -38,11 +38,13 @@ case "${1:-}" in
 esac
 
 GPU=${GPU:-0}
+# Phi-4(≥4.47)·Jamba(seqcls 최신) → transformers 오버레이. 메인 4.46.3과 분리(이 서버는 npz만 산출).
+TF='--with transformers==4.57.1'
 echo "[exotic] GPU$GPU  $MODEL  → tag=$TAG  target=$TARGET"
-CUDA_VISIBLE_DEVICES=$GPU uv run python -m ai_challenge.method.train $COMMON $EXTRA \
+CUDA_VISIBLE_DEVICES=$GPU uv run $TF python -m ai_challenge.method.train $COMMON $EXTRA \
   --model "$MODEL" --lora-target-modules "$TARGET" --out "runs/t_${TAG}"
 echo "[exotic] 학습 완료 → soft-label 캐시(640, student 일관)"
-CUDA_VISIBLE_DEVICES=$GPU uv run python -m ai_challenge.method.gen_softlabels \
+CUDA_VISIBLE_DEVICES=$GPU uv run $TF python -m ai_challenge.method.gen_softlabels \
   --teacher-dir "runs/t_${TAG}/model" --tag "$TAG" --serialize $SER --max-length $ML --load-in-4bit
 echo "[exotic] 완료 ✅  runs/_teacher_logits/${TAG}.npz"
 echo "         메인으로:  scp runs/_teacher_logits/${TAG}.{npz,json} main:/data/agent_action/runs/_teacher_logits/"
