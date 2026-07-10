@@ -35,3 +35,5 @@
 | 2026-07-09 | others | 단일-student 레버 총점검 — 전부 실패(앙상블만 생존) | threshold_q3b_student=-0.0019, threshold_w6_student=-0.0030, dkd=0.7633(vanilla 0.7747), cues=하락 | [로그](others/2026-07-09.md) |
 | 2026-07-09 | others | 이질 teacher(GLM 격리env) + 서버 tooling + 제출 | glm4_32b=격리4.55, submit_q3b_all_lb=0.781638, best_w6=0.787396, hetero_tooling=train_hetero.sh | [로그](others/2026-07-09.md) |
 | 2026-07-09 | others | feature engineering(CUES) 재검토 — OOF·LB 둘 다 하락 | cues_teacher_oof=0.7693(base 0.7745), cues_student_lb=0.782716(w6 0.787396) | [로그](feature_engineering.md) |
+| 2026-07-10 | encoder_team | DeBERTa-v3-large 이질 teacher (encoder를 teacher로 최초 시도) | oof_macro_f1=0.7267, acc=0.7387, val_fold=0, ep3=0.7011, ep4=0.7098, ep5=0.7267, train_argmax=0.7525 | [로그](encoder_team/2026-07-10.md) |
+| 2026-07-10 | encoder_team | ModernBERT-large 이질 teacher — undertrained(lr 미스) | oof_macro_f1=0.5977, acc=0.6212, val_fold=0, ep3=0.5182, ep4=0.5672, ep5=0.5977, train_argmax=0.6403 | [로그](encoder_team/2026-07-10.md) |
