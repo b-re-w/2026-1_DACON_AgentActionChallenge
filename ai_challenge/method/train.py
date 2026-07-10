@@ -1,20 +1,29 @@
-"""접근 A/B 학습 — 인코더(mDeBERTa)/디코더(Qwen) 공용 14-way seq-cls.
+"""단일 fold(또는 all-data) 학습 CLI — seq-cls 14-way.
 
-공통 로직은 ``ai_challenge.models.common``. 이 파일은 CLI + 오케스트레이션만 담당한다.
+`models/common.py` 를 오케스트레이션한다. 산출물(runs/<name>/):
+  model/            제출용 저장 모델(id2label 포함, infer_config)
+  oof.csv           검증셋 (id, true, pred)  — all-data 면 생략
+  oof_logits.npy    검증셋 로짓 (N, 14)      — threshold/ensemble 용
+  oof_ids.json      검증셋 id 순서
+  metrics.json      macro_f1 / acc / 설정
 
 사용:
-    uv run python -m ai_challenge.method.train --model microsoft/mdeberta-v3-base --out runs/A --bf16
-    uv run python -m ai_challenge.method.train --model Qwen/Qwen2.5-0.5B --out runs/B --bf16 --no-class-weight
+    uv run python -m ai_challenge.method.train \
+        --model microsoft/mdeberta-v3-base --preset base \
+        --fold 0 --epochs 3 --bs 32 --lr 2e-5 --max-length 512 \
+        --name mdeberta_base_f0
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
+import numpy as np
 from transformers import DataCollatorWithPadding
 
-from ai_challenge.datasets import SERIALIZE_PRESETS
+from ai_challenge.datasets import CLASS_TO_ID, ID_TO_CLASS, SERIALIZE_PRESETS
 from ai_challenge.models.common import (
     WeightedTrainer,
     build_datasets,
@@ -31,113 +40,111 @@ from ai_challenge.models.common import (
 )
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--model", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--val-fold", type=int, default=0)
+def parse_args() -> argparse.Namespace:
+    ap = argparse.ArgumentParser(description="seq-cls 14-way 단일 fold 학습")
+    ap.add_argument("--model", default="microsoft/mdeberta-v3-base")
+    ap.add_argument("--preset", default="base", choices=list(SERIALIZE_PRESETS),
+                    help="직렬화 프리셋(학습·추론 동일해야 함)")
+    ap.add_argument("--fold", type=int, default=0, help="검증 fold 번호")
+    ap.add_argument("--all-data", action="store_true", help="전체 데이터 학습(val 없음)")
     ap.add_argument("--epochs", type=float, default=3.0)
-    ap.add_argument("--batch-size", type=int, default=32)
+    ap.add_argument("--bs", type=int, default=32)
     ap.add_argument("--grad-accum", type=int, default=1)
-    ap.add_argument("--max-length", type=int, default=512)
     ap.add_argument("--lr", type=float, default=2e-5)
+    ap.add_argument("--max-length", type=int, default=512)
     ap.add_argument("--warmup-ratio", type=float, default=0.06)
     ap.add_argument("--weight-decay", type=float, default=0.01)
-    ap.add_argument("--bf16", action="store_true")
-    ap.add_argument("--num-workers", type=int, default=4)
-    ap.add_argument("--no-class-weight", action="store_true")
-    ap.add_argument("--all-data", action="store_true",
-                    help="검증셋 없이 전체 70k 학습(최종 제출용). OOF 미산출.")
+    ap.add_argument("--class-weight", action="store_true", help="balanced class-weighted CE")
     ap.add_argument("--grad-checkpoint", action="store_true")
-    ap.add_argument("--serialize", default="base", choices=list(SERIALIZE_PRESETS),
-                    help="입력 직렬화 프리셋 (입력 신호 실험용)")
+    ap.add_argument("--num-workers", type=int, default=4)
     ap.add_argument("--seed", type=int, default=42, help="앙상블 다양성용 시드")
     ap.add_argument("--optim", default="adamw_torch",
-                    help="옵티마이저. 큰 모델은 paged_adamw_8bit (bitsandbytes)")
-    ap.add_argument("--keep-columns", action="store_true",
-                    help="remove_unused_columns=False (transformers 5.x 에서 labels 유지)")
-    ap.add_argument("--manual-oof", action="store_true",
-                    help="in-loop eval 끄고 학습 후 predict_logits 로 OOF 산출 "
-                         "(transformers 5.x eval 루프가 compute_metrics 를 안 부르는 문제 우회)")
-    ap.add_argument("--fsdp", default="",
-                    help="FSDP 샤딩 (예: 'full_shard auto_wrap'). torchrun --nproc_per_node=N 로 실행. 대형(14B) 다중 GPU용")
-    ap.add_argument("--fsdp-layer-cls", default="Qwen2DecoderLayer",
-                    help="FSDP auto_wrap 대상 트랜스포머 레이어 클래스명")
-    args = ap.parse_args()
+                    help="7B 급은 paged_adamw_8bit(bitsandbytes)로 옵티마이저 메모리 절약")
+    ap.add_argument("--fp16", action="store_true", help="bf16 대신 fp16(구형 GPU)")
+    ap.add_argument("--name", default=None, help="runs/<name>. 미지정 시 자동 생성")
+    ap.add_argument("--out-root", default="runs")
+    return ap.parse_args()
 
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
-    print(f"[cfg] {vars(args)}", flush=True)
+
+def main() -> None:
+    args = parse_args()
+    name = args.name or (
+        f"{args.model.split('/')[-1]}_{args.preset}"
+        + ("_all" if args.all_data else f"_f{args.fold}")
+        + f"_s{args.seed}"
+    )
+    out_dir = Path(args.out_root) / name
+    out_dir.mkdir(parents=True, exist_ok=True)
+    serialize_kwargs = SERIALIZE_PRESETS[args.preset]
+
+    print(f"[train] {name}  model={args.model} preset={args.preset} "
+          f"fold={'all' if args.all_data else args.fold} bs={args.bs} lr={args.lr} "
+          f"epochs={args.epochs} max_len={args.max_length} cw={args.class_weight}")
 
     records = load_train_records()
-    fold = get_folds(records)
+    fold = None if args.all_data else get_folds(records)
     tok = build_tokenizer(args.model)
+    model = build_model(args.model, tok, grad_checkpoint=args.grad_checkpoint)
+
     train_ds, val_ds = build_datasets(
         records, fold, tok, args.max_length,
-        val_fold=args.val_fold, all_data=args.all_data,
-        serialize_kwargs=SERIALIZE_PRESETS[args.serialize],
+        val_fold=args.fold, all_data=args.all_data,
+        serialize_kwargs=serialize_kwargs,
     )
-    print(f"[data] train={len(train_ds)} val={len(val_ds) if val_ds else 0}", flush=True)
 
-    class_weights = None if args.no_class_weight else compute_class_weights(train_ds.samples)
+    class_weights = compute_class_weights(train_ds.samples) if args.class_weight else None
 
-    model = build_model(args.model, tok, grad_checkpoint=args.grad_checkpoint)
     targs = build_training_args(
-        out, epochs=args.epochs, batch_size=args.batch_size, lr=args.lr,
-        grad_accum=args.grad_accum, warmup_ratio=args.warmup_ratio,
-        weight_decay=args.weight_decay, bf16=args.bf16, num_workers=args.num_workers,
-        grad_checkpoint=args.grad_checkpoint, all_data=args.all_data,
-        seed=args.seed, optim=args.optim,
-        remove_unused_columns=not args.keep_columns,
-        inloop_eval=not args.manual_oof,
-        fsdp=args.fsdp, fsdp_layer_cls=args.fsdp_layer_cls,
+        out_dir,
+        epochs=args.epochs, batch_size=args.bs, lr=args.lr, grad_accum=args.grad_accum,
+        warmup_ratio=args.warmup_ratio, weight_decay=args.weight_decay,
+        bf16=not args.fp16, num_workers=args.num_workers,
+        grad_checkpoint=args.grad_checkpoint, all_data=args.all_data, seed=args.seed,
+        optim=args.optim,
     )
+
     trainer = WeightedTrainer(
-        model=model, args=targs, train_dataset=train_ds, eval_dataset=val_ds,
+        model=model, args=targs,
+        train_dataset=train_ds, eval_dataset=val_ds,
         data_collator=DataCollatorWithPadding(tok),
-        compute_metrics=compute_metrics, class_weights=class_weights,
+        compute_metrics=compute_metrics,
+        class_weights=class_weights,
     )
     trainer.train()
-    model_dir = save_submission_model(trainer, tok, out, args.max_length)
 
-    if args.all_data:
-        print(f"[done] all-data 학습 완료 -> {out}/model", flush=True)
-        return
+    # 제출용 모델 저장 + infer_config 에 preset 기록(pack 이 추론 직렬화에 사용)
+    model_dir = save_submission_model(trainer, tok, out_dir, args.max_length)
+    icfg = json.loads((model_dir / "infer_config.json").read_text())
+    icfg["serialize"] = args.preset
+    (model_dir / "infer_config.json").write_text(json.dumps(icfg))
 
-    if args.manual_oof:
-        # transformers 5.x eval 루프 우회: 저장된 모델을 predict_logits 로 재추론해 OOF 산출
-        from sklearn.metrics import accuracy_score, f1_score
+    payload: dict = {
+        "name": name, "model": args.model, "preset": args.preset,
+        "fold": "all" if args.all_data else args.fold,
+        "epochs": args.epochs, "bs": args.bs, "lr": args.lr,
+        "max_length": args.max_length, "class_weight": args.class_weight, "seed": args.seed,
+    }
 
-        from ai_challenge.datasets import CLASS_TO_ID
-        from ai_challenge.models.common import predict_logits
-
-        val_samples = val_ds.samples
-        logits = predict_logits(str(model_dir), val_samples, max_length=args.max_length,
-                                serialize_kwargs=SERIALIZE_PRESETS[args.serialize])
+    if val_ds is not None:
+        pred = trainer.predict(val_ds)
+        logits = np.asarray(pred.predictions, dtype=np.float32)
         preds = logits.argmax(-1)
-        y = [CLASS_TO_ID[s.action] for s in val_samples]
-        macro = f1_score(y, preds, average="macro")
-        acc = accuracy_score(y, preds)
-        write_oof(out, val_samples, preds)
-        write_metrics(out, {
-            "model": args.model, "val_fold": args.val_fold,
-            "macro_f1": float(macro), "acc": float(acc),
-            "n_train": len(train_ds), "n_val": len(val_samples),
-        })
-        print(f"[done] (manual-oof) macro_f1={macro:.4f} -> {out}/model", flush=True)
-        return
+        write_oof(out_dir, val_ds.samples, preds)
+        np.save(out_dir / "oof_logits.npy", logits)
+        (out_dir / "oof_ids.json").write_text(
+            json.dumps([s.id for s in val_ds.samples]), encoding="utf-8"
+        )
+        from sklearn.metrics import accuracy_score, f1_score
+        y = np.array([CLASS_TO_ID[s.action] for s in val_ds.samples])
+        payload["macro_f1"] = float(f1_score(y, preds, average="macro"))
+        payload["acc"] = float(accuracy_score(y, preds))
+        # per-class F1 (병목 진단용)
+        per = f1_score(y, preds, average=None, labels=list(range(len(ID_TO_CLASS))))
+        payload["per_class_f1"] = {ID_TO_CLASS[i]: float(per[i]) for i in range(len(per))}
+        print(f"[result] macro_f1={payload['macro_f1']:.5f} acc={payload['acc']:.5f}")
 
-    metrics = trainer.evaluate()
-    print(f"[eval] {metrics}", flush=True)
-    preds = trainer.predict(val_ds).predictions.argmax(-1)
-    write_oof(out, val_ds.samples, preds)
-    write_metrics(out, {
-        "model": args.model, "val_fold": args.val_fold,
-        "macro_f1": float(metrics.get("eval_macro_f1", 0.0)),
-        "acc": float(metrics.get("eval_acc", 0.0)),
-        "n_train": len(train_ds), "n_val": len(val_ds),
-    })
-    print(f"[done] macro_f1={metrics.get('eval_macro_f1'):.4f} -> {out}/model", flush=True)
+    write_metrics(out_dir, payload)
+    print(f"[done] {out_dir}")
 
 
 if __name__ == "__main__":

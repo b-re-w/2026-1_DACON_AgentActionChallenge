@@ -144,6 +144,7 @@ def build_training_args(
     all_data: bool = False,
     remove_unused_columns: bool = True,
     inloop_eval: bool = True,
+    eval_steps: int | None = None,
     seed: int = 42,
     optim: str = "adamw_torch",
     fsdp: str = "",
@@ -169,9 +170,14 @@ def build_training_args(
         weight_decay=weight_decay,
         bf16=bf16,
         fp16=not bf16,
-        eval_strategy="no" if (all_data or not inloop_eval) else "epoch",
-        save_strategy="no" if (all_data or not inloop_eval) else "epoch",
-        save_total_limit=1,
+        # eval_steps 지정 시 스텝 단위 검증(체크포인트 선택 정밀화) — LLM 은 loss 최소
+        # 시점 ≠ macro-F1 최적 시점이라 중간 체크포인트가 최종보다 나은 경우가 흔하다.
+        eval_strategy=("no" if (all_data or not inloop_eval)
+                       else ("steps" if eval_steps else "epoch")),
+        save_strategy=("no" if (all_data or not inloop_eval)
+                       else ("steps" if eval_steps else "epoch")),
+        **({"eval_steps": eval_steps, "save_steps": eval_steps} if eval_steps and not all_data and inloop_eval else {}),
+        save_total_limit=2,
         load_best_model_at_end=not (all_data or not inloop_eval),
         metric_for_best_model="macro_f1",
         greater_is_better=True,

@@ -1,0 +1,7 @@
+# queue2 (수정) — student 베이스라인 + teacher 1호기
+# 1) 디코더 0.5B student-side 직렬화 신호 (유지)
+--model Qwen/Qwen2.5-0.5B --preset cues_hist --fold 0 --bs 32 --lr 1e-5 --epochs 3 --max-length 512 --name qwen05b_cueshist_f0
+# (제거) qwen1.5b full FT — student로 제출 불가(T4 10분 초과 실증), teacher는 3B/7B로 직행
+# (제거) mdeberta ep4 — 인코더 경로 폐기(팀 실측 상한 0.760)
+# 2) teacher 1호기: Qwen2.5-3B full FT fold0 (팀 레시피 재현 기준점)
+--model Qwen/Qwen2.5-3B --preset cues_hist --fold 0 --bs 8 --grad-accum 4 --lr 1e-5 --epochs 2 --max-length 512 --grad-checkpoint --name qwen3b_cueshist_f0

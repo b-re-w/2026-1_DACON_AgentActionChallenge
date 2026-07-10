@@ -1,0 +1,5 @@
+# queue3 — teacher 강화 (export 종료 후 순차)
+# 1) 7B teacher (핵심: teacher 상한 실측). paged_adamw_8bit 로 80GB 내 수용
+--model Qwen/Qwen2.5-7B --preset base --fold 0 --bs 4 --grad-accum 8 --lr 7e-6 --epochs 2 --max-length 512 --grad-checkpoint --optim paged_adamw_8bit --name qwen7b_base_f0
+# 2) 3B 레시피 수정판 (base 프리셋 + 3ep — cues_hist/2ep 교란 제거)
+--model Qwen/Qwen2.5-3B --preset base --fold 0 --bs 8 --grad-accum 4 --lr 1e-5 --epochs 3 --max-length 512 --grad-checkpoint --name qwen3b_base_f0

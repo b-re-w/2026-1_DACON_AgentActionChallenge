@@ -178,10 +178,13 @@ def main():
     cfg_path = os.path.join(MODEL_DIR, "infer_config.json")
     max_length = 512
     serialize_mode = "base"
+    class_bias = None  # per-class 가산 bias (macro-F1 튜닝값, tune_threshold 산출)
     if os.path.exists(cfg_path):
         _cfg = json.load(open(cfg_path))
         max_length = int(_cfg.get("max_length", 512))
         serialize_mode = _cfg.get("serialize", "base")
+        if _cfg.get("class_bias_vector"):
+            class_bias = torch.tensor(_cfg["class_bias_vector"], dtype=torch.float32)
     include_cues = serialize_mode in ("cues", "cues_hist")
     open_files_names = 8 if serialize_mode in ("cues", "cues_hist", "paths", "rich") else 0
     batch_size = 64
@@ -216,7 +219,12 @@ def main():
             batch = [texts[i] for i in chunk]
             enc = tok(batch, truncation=True, max_length=max_length,
                       padding=True, return_tensors="pt").to(device)
-            idx = model(**enc).logits.argmax(-1).tolist()
+            logits = model(**enc).logits.float().cpu()
+            # bias 는 softmax 확률 공간에서 튜닝됨(tune_threshold) → 동일 공간에서 적용
+            scores = torch.softmax(logits, dim=-1)
+            if class_bias is not None:
+                scores = scores + class_bias
+            idx = scores.argmax(-1).tolist()
             for pos, i in enumerate(chunk):
                 preds_by_idx[i] = id2label[idx[pos]]
     pred_map = dict(zip(ids, preds_by_idx))
@@ -280,11 +288,12 @@ def to_int4_dir(model_dir: Path, dst: Path) -> None:
 
 
 def pack(model_dir, out=None, name=None, fp16: bool = True, serialize_mode="base",
-         quant="fp16") -> Path:
+         quant="fp16", bias_json=None) -> Path:
     """학습된 model/ 를 제출 zip 으로 패키징한다. out 미지정 시 build/<name>.zip.
 
     serialize_mode: 추론 직렬화 프리셋(학습과 일치해야 함).
     quant: fp16(기본) | int4(bitsandbytes nf4, 큰 모델용 → requirements 에 bitsandbytes).
+    bias_json: tune_threshold 산출 class_bias.json 경로 → 추론 시 per-class bias 적용.
     """
     model_dir = Path(model_dir)
     if not model_dir.is_dir():
@@ -323,6 +332,12 @@ def pack(model_dir, out=None, name=None, fp16: bool = True, serialize_mode="base
     icfg_path = src_dir / "infer_config.json"
     icfg = json.loads(icfg_path.read_text()) if icfg_path.exists() else {}
     icfg["serialize"] = serialize_mode
+    if bias_json:
+        bias_payload = json.loads(Path(bias_json).read_text())
+        icfg["class_bias_vector"] = bias_payload["bias_vector"]
+        print(f"[bias] class_bias 주입: {bias_json} "
+              f"(OOF {bias_payload.get('macro_f1_before', 0):.5f}"
+              f" → {bias_payload.get('macro_f1_after', 0):.5f})")
     icfg_path.write_text(json.dumps(icfg))
 
     skip = {"optimizer.pt", "scheduler.pt", "trainer_state.json", "training_args.bin", "rng_state.pth"}
@@ -398,6 +413,8 @@ def main() -> None:
                     help="추론 직렬화 프리셋(학습과 일치). cues 등")
     pp.add_argument("--quant", default="fp16", choices=["fp16", "int4"],
                     help="int4 = bitsandbytes nf4(큰 모델 1GB 대응)")
+    pp.add_argument("--bias", default=None,
+                    help="tune_threshold 산출 class_bias.json 경로(per-class bias 적용)")
 
     pe = sub.add_parser("eval", help="제출 전 로컬 검증(평가 서버 모사)")
     pe.add_argument("--zip", required=True)
@@ -406,7 +423,7 @@ def main() -> None:
     args = ap.parse_args()
     if args.cmd == "pack":
         pack(args.model_dir, out=args.out, name=args.name, fp16=not args.no_fp16,
-             serialize_mode=args.serialize, quant=args.quant)
+             serialize_mode=args.serialize, quant=args.quant, bias_json=args.bias)
     elif args.cmd == "eval":
         local_eval(args.zip, data=args.data)
 

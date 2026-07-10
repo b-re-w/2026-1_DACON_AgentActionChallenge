@@ -1,0 +1,5 @@
+# queue4 — 밤 배치: teacher 강화 (내일 블렌드 0.79+ 목표)
+# 1) Coder-7B: 코드 도메인 특화 백본 (이종 다양성) — ~7h
+--model Qwen/Qwen2.5-Coder-7B --preset base --fold 0 --bs 4 --grad-accum 8 --lr 7e-6 --epochs 2 --max-length 512 --grad-checkpoint --optim paged_adamw_8bit --name coder7b_base_f0
+# 2) 7B 3에폭 연장판 (2ep 종료 시점에도 loss 하강 중이었음) — ~10.5h
+--model Qwen/Qwen2.5-7B --preset base --fold 0 --bs 4 --grad-accum 8 --lr 7e-6 --epochs 3 --max-length 512 --grad-checkpoint --optim paged_adamw_8bit --name qwen7b_3ep_f0

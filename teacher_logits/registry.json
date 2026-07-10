@@ -1,0 +1,122 @@
+{
+  "qwen3b_cueshist_f0__cues_hist": {
+    "backbone": "Qwen/Qwen2.5-3B",
+    "preset": "cues_hist",
+    "fold": "0",
+    "model_dir": "runs/qwen3b_cueshist_f0/model",
+    "oof_macro_f1": 0.7647412379327853,
+    "n_rows": 70000,
+    "saved_at": "2026-07-10T01:26:25",
+    "note": "teacher 1호기: 팀 3B 레시피 재현(fold0)"
+  },
+  "qwen7b_base_f0__base": {
+    "backbone": "Qwen/Qwen2.5-7B",
+    "preset": "base",
+    "fold": "0",
+    "model_dir": "runs/qwen7b_base_f0/model",
+    "oof_macro_f1": 0.7760530099389932,
+    "n_rows": 70000,
+    "saved_at": "2026-07-10T13:19:46",
+    "note": "7B base 2ep (OOF 0.77605, +bias 0.78081)"
+  },
+  "qwen3b_base_f0__base": {
+    "backbone": "Qwen/Qwen2.5-3B",
+    "preset": "base",
+    "fold": "0",
+    "model_dir": "runs/qwen3b_base_f0/model",
+    "oof_macro_f1": 0.7662517209729082,
+    "n_rows": 70000,
+    "saved_at": "2026-07-10T13:34:46",
+    "note": "3B base 3ep 레시피 수정판"
+  },
+  "team_q14b": {
+    "backbone": "Qwen2.5-14B QLoRA ml640 (팀)",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": "gpu4:runs/_teacher_logits/q14b.npz",
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-10T16:10:17",
+    "note": "val OOF 0.7651(LOG). train argmax 0.8347 | 70k argmax=0.8347"
+  },
+  "team_q32b": {
+    "backbone": "Qwen2.5-32B QLoRA ml640 (팀)",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": "gpu4:runs/_teacher_logits/q32b.npz",
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-10T16:10:17",
+    "note": "train argmax 0.7928 | 70k argmax=0.7928"
+  },
+  "team_q3b": {
+    "backbone": "Qwen2.5-3B QLoRA ml640 (팀)",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": "gpu4:runs/_teacher_logits/q3b.npz",
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-10T16:10:17",
+    "note": "val OOF 0.7639(LOG) | 70k argmax=0.8216"
+  },
+  "team_q3b_bl3": {
+    "backbone": "q3b 라벨보정 blend λ0.3 (팀)",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": "gpu4:runs/_teacher_logits/q3b_bl3.npz",
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-10T16:10:17",
+    "note": "correct_store | 70k argmax=0.9393"
+  },
+  "team_q3b_ka": {
+    "backbone": "q3b 라벨보정 ka λ0.3 (팀)",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": "gpu4:runs/_teacher_logits/q3b_ka.npz",
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-10T16:10:17",
+    "note": "correct_store | 70k argmax=0.9997"
+  },
+  "team_qgpt5": {
+    "backbone": "Qwen3-4B GPT5증류 teacher (팀)",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": "gpu4:runs/_teacher_logits/qgpt5.npz",
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-10T16:10:17",
+    "note": "val OOF 0.7741(LOG). w6 핵심 teacher | 70k argmax=0.8166"
+  },
+  "team_qgptoss": {
+    "backbone": "gpt-oss 증류 4B teacher (팀)",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": "gpu4:runs/_teacher_logits/qgptoss.npz",
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-10T16:10:17",
+    "note": "train argmax 0.8227 | 70k argmax=0.8227"
+  },
+  "team_qw6": {
+    "backbone": "kd_w6_all teacher blend 캐시 (팀)",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": "gpu4:runs/_teacher_logits/qw6.npz",
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-10T16:10:17",
+    "note": "LB 0.7874를 만든 최종 soft-target | 70k argmax=0.8213"
+  },
+  "coder7b_base_f0__base": {
+    "backbone": "Qwen/Qwen2.5-Coder-7B",
+    "preset": "base",
+    "fold": "0",
+    "model_dir": "runs/coder7b_base_f0/model",
+    "oof_macro_f1": 0.7607217120261636,
+    "n_rows": 70000,
+    "saved_at": "2026-07-10T23:49:08",
+    "note": "Coder-7B base 2ep (이종 백본)"
+  }
+}
