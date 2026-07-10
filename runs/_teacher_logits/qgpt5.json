@@ -1,0 +1,7 @@
+{
+  "tag": "qgpt5",
+  "n": 70000,
+  "teacher_dir": "runs/t_gpt5q3_4b/model",
+  "serialize": "base",
+  "max_length": 640
+}

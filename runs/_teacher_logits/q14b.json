@@ -1,0 +1,7 @@
+{
+  "tag": "q14b",
+  "n": 70000,
+  "teacher_dir": "runs/t14b_qlora/model",
+  "serialize": "base",
+  "max_length": 640
+}

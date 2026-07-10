@@ -1,0 +1,7 @@
+{
+  "tag": "qgptoss",
+  "n": 70000,
+  "teacher_dir": "runs/t_gptoss4b/model",
+  "serialize": "base",
+  "max_length": 640
+}

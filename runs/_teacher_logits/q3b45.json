@@ -1,0 +1,7 @@
+{
+  "tag": "q3b45",
+  "n": 70000,
+  "teacher_dir": "runs/t3b_s45/model",
+  "serialize": "base",
+  "max_length": 640
+}

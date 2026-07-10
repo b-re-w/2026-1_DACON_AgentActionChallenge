@@ -1,0 +1,7 @@
+{
+  "tag": "qw6",
+  "n": 70000,
+  "from": "kd_w6_all/teacher_cache",
+  "max_length": 512,
+  "serialize": "base"
+}
