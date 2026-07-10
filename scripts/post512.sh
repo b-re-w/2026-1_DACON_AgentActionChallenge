@@ -19,8 +19,12 @@ Q="q3bb q3b43 q3b44 q3b45"
 dist w6r_both    "$Q qgpt5:1 qgptoss:1"    # 4×3B + GPT5 + oss (동등)
 dist w6r_g20oss1 "$Q qgpt5:2 qgptoss:1"    # 4×3B + GPT5×2 + oss
 dist w6r_oss2g1  "$Q qgptoss:2 qgpt5:1"    # 4×3B + oss×2 + GPT5 (oss 우위 반영)
-say "--- oss+gpt5 조합 요약 (기준: qw6=0.7847, w6r_oss20=0.7847, w6r_g20=0.7816) ---"
-for n in w6r_both w6r_g20oss1 w6r_oss2g1; do echo "  $n: $(grep -oE '\"macro_f1\": [0-9.]+' runs/kd_$n/metrics.json 2>/dev/null|grep -oE '[0-9.]+')"|tee -a "$LOG"; done
+# 14B 가중 스윕 (승리레시피 qw6 + q14b, 14B 저가중부터). 뭉친 qw6(512) + q14b(640) id-평균.
+dist w6_14b_51   "qw6:5 q14b:1"            # 14B 매우 저가중 (순수 qw6에 근접)
+dist w6_14b_31   "qw6:3 q14b:1"            # 14B 저가중
+dist w6_14b_11   "qw6:1 q14b:1"            # 동등 (희석 예상 확인)
+say "--- oss+gpt5·14B 조합 요약 (기준: qw6=0.7847, w6r_oss20=0.7847, w6r_g20=0.7816) ---"
+for n in w6r_both w6r_g20oss1 w6r_oss2g1 w6_14b_51 w6_14b_31 w6_14b_11; do echo "  $n: $(grep -oE '\"macro_f1\": [0-9.]+' runs/kd_$n/metrics.json 2>/dev/null|grep -oE '[0-9.]+')"|tee -a "$LOG"; done
 
 # 2) t3b_640 학습 (님 가설: teacher 640 학습이 512보다 나은가)
 if [ ! -f runs/t3b_640/model/config.json ]; then
