@@ -10,6 +10,19 @@ until [ -f runs/kd_oss512_f0/metrics.json ] || ! screen -ls 2>/dev/null|grep -q 
 sleep 20
 say "gpt-oss@512 OOF = $(grep -oE '"macro_f1": [0-9.]+' runs/kd_oss512_f0/metrics.json 2>/dev/null|grep -oE '[0-9.]+' || echo NA)"
 
+# ★0) 최우선: w6r_oss20 all-data + pack (제출 후보 — OOF 0.784701, qw6와 동률·미세 위). 제출은 사용자 승인.
+if [ ! -f build/w6r_oss20_all.zip ]; then
+  say "★ w6r_oss20 all-data 학습 (4×3B + gpt-oss×2 @640)"
+  CUDA_VISIBLE_DEVICES=$G uv run python -m ai_challenge.method.distill \
+    --teacher-logits q3bb q3b43 q3b44 q3b45 qgptoss:2 --student Qwen/Qwen2.5-0.5B \
+    --out runs/kd_w6r_oss20_all --all-data --bf16 --temperature 3 --alpha 0.25 --max-length 640 --serialize base \
+    >runs/kd_w6r_oss20_all.log 2>&1 && \
+  { say "★ w6r_oss20 pack(fp16)"; uv run python -m ai_challenge.utils.pack pack \
+    --model-dir runs/kd_w6r_oss20_all/model --name w6r_oss20_all --serialize base --quant fp16 >>"$LOG" 2>&1; } \
+  || say "w6r_oss20 준비 실패"
+fi
+say "★★ w6r_oss20 제출준비 완료 → build/w6r_oss20_all.zip (제출은 사용자 승인 대기)"
+
 # 1) oss+gpt5 조합 스윕 @640 (개별 store 재조합, gen 불필요)
 dist(){ local n=$1 t=$2 o=runs/kd_$1; [ -f $o/metrics.json ] && { say "$n 있음=$(grep -oE '\"macro_f1\": [0-9.]+' $o/metrics.json|grep -oE '[0-9.]+')"; return; }
   say "$n :: $t"; CUDA_VISIBLE_DEVICES=$G uv run python -m ai_challenge.method.distill --teacher-logits $t \
