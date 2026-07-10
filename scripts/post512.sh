@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# gpt-oss@512 완료 후 순차 실행: (1) oss+gpt5 조합 스윕 @640 (stores 준비됨) → (2) t3b_640 학습.
+# gpt-oss@512 완료 후: oss+gpt5 조합 스윕 + qw6+q14b 가중 스윕 @640 (stores 준비됨).
 # 전부 제출 없음 — OOF만.
 set -uo pipefail; cd "$(dirname "$0")/.."; export HF_HOME=/data/hf
 G=1; LOG=runs/post512.log
