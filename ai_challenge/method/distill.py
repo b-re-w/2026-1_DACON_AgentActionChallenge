@@ -198,10 +198,17 @@ def main() -> None:
     #      id 기준으로 조회·평균. teacher forward 0회 → α/T/student/앙상블조합 스윕이 즉시.
     #  (B) --teacher-dir: 기존 방식(모델 로드 후 forward). 결과는 아래 공유 캐시에 저장.
     if args.teacher_logits:
-        print(f"[teacher] 재사용 store {args.teacher_logits} 에서 soft-label 로드 "
-              f"(teacher forward 없음)", flush=True)
-        tl_train = gather_teacher_logits(args.teacher_logits, train_samples)
-        tl_val = gather_teacher_logits(args.teacher_logits, val_samples)
+        # "tag" 또는 "tag:weight" 파싱 (이질 teacher up-weight). 예: --teacher-logits qw6:3 q32b:1
+        tl_tags, tl_wts = [], []
+        for spec in args.teacher_logits:
+            if ":" in spec and not spec.endswith(".npz"):
+                t, w = spec.rsplit(":", 1); tl_tags.append(t); tl_wts.append(float(w))
+            else:
+                tl_tags.append(spec); tl_wts.append(1.0)
+        wts = tl_wts if any(w != 1.0 for w in tl_wts) else None
+        print(f"[teacher] 재사용 store {tl_tags} weights={tl_wts} 로드 (forward 없음)", flush=True)
+        tl_train = gather_teacher_logits(tl_tags, train_samples, weights=wts)
+        tl_val = gather_teacher_logits(tl_tags, val_samples, weights=wts)
     else:
         # teacher soft-label 공유 캐시 — teacher soft-label 은 (teacher 모델들 × teacher 입력
         # 프리셋 × fold × all_data × max_length) 에만 의존하고 student·α·T 와 무관하므로,

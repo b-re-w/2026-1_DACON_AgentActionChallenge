@@ -457,17 +457,22 @@ def save_teacher_logits(tag, ids, logits, meta=None) -> Path:
     return path
 
 
-def gather_teacher_logits(tags_or_paths, samples) -> np.ndarray:
-    """지정 teacher store 들을 samples 순서로 정렬·평균한 (N,14) logits 반환.
+def gather_teacher_logits(tags_or_paths, samples, weights=None) -> np.ndarray:
+    """지정 teacher store 들을 samples 순서로 정렬·(가중)평균한 (N,14) logits 반환.
 
     각 store 는 전체 레코드 logits 이므로 여기서 sample.id 로 조회해 현재
     fold/all_data 하위집합만 뽑는다. 요청 id 가 store 에 없으면 조기 실패(불일치 감지).
+    weights: store별 곱가중(합으로 정규화). None 이면 동등평균. 이질 teacher up-weight 용.
     """
     if not samples:
         return np.zeros((0, NUM_CLASSES), np.float32)
+    if weights is None:
+        weights = [1.0] * len(tags_or_paths)
+    if len(weights) != len(tags_or_paths):
+        raise ValueError(f"weights({len(weights)}) != teachers({len(tags_or_paths)})")
     want = [s.id for s in samples]
     acc = np.zeros((len(samples), NUM_CLASSES), np.float32)
-    for t in tags_or_paths:
+    for t, w in zip(tags_or_paths, weights):
         path = resolve_teacher_logits_path(t)
         if not path.exists():
             raise FileNotFoundError(
@@ -482,8 +487,8 @@ def gather_teacher_logits(tags_or_paths, samples) -> np.ndarray:
                 f"{path.name} 에 없는 레코드 id={e.args[0]} — teacher store 가 현재 "
                 f"데이터와 불일치(재생성 필요)"
             ) from None
-        acc += z["logits"][idx]
-    acc /= len(tags_or_paths)
+        acc += float(w) * z["logits"][idx]
+    acc /= float(sum(weights))
     return acc
 
 
