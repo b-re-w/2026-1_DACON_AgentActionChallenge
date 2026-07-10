@@ -25,4 +25,8 @@ dist w6_14b_31   "qw6:3 q14b:1"            # 14B 저가중
 dist w6_14b_11   "qw6:1 q14b:1"            # 동등 (희석 예상 확인)
 say "--- oss+gpt5·14B 조합 요약 (기준: qw6=0.7847, w6r_oss20=0.7847, w6r_g20=0.7816) ---"
 for n in w6r_both w6r_g20oss1 w6r_oss2g1 w6_14b_51 w6_14b_31 w6_14b_11; do echo "  $n: $(grep -oE '\"macro_f1\": [0-9.]+' runs/kd_$n/metrics.json 2>/dev/null|grep -oE '[0-9.]+')"|tee -a "$LOG"; done
-say "=== post512 완료 (제출 없음) ==="
+# 재료 준비: GPT5@512 (적응적 clean-512 조합용). Qwen3-4B라 오버레이.
+[ -f runs/_teacher_logits/qgpt5_5.npz ] || { say "qgpt5_5 (GPT5@512, overlay) 미리 생성"; CUDA_VISIBLE_DEVICES=$G \
+  uv run --with "transformers==4.55.0" python -m ai_challenge.method.gen_softlabels \
+  --teacher-dir runs/t_gpt5q3_4b/model --tag qgpt5_5 --serialize base --max-length 512 >>"$LOG" 2>&1; }
+say "=== post512 완료 (제출 없음). 512 재료: q3bb5·q3b4*_5·qgptoss5·qgpt5_5 준비됨 ==="
