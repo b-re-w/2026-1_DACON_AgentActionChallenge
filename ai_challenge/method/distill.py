@@ -162,6 +162,7 @@ def main() -> None:
                     help="Decoupled KD 사용 (KL 을 TCKD+NCKD 로 분리, NCKD 강화). vanilla KD 대체.")
     ap.add_argument("--dkd-alpha", type=float, default=1.0, help="TCKD(정답 이분) 가중")
     ap.add_argument("--dkd-beta", type=float, default=8.0, help="NCKD(비정답 분포) 가중 — DKD 핵심 레버")
+    ap.add_argument("--seed", type=int, default=42, help="학습 시드 (model soup용 variance)")
     ap.add_argument("--bf16", action="store_true")
     ap.add_argument("--num-workers", type=int, default=4)
     ap.add_argument("--grad-checkpoint", action="store_true")
@@ -262,6 +263,7 @@ def main() -> None:
         out, epochs=args.epochs, batch_size=args.batch_size, lr=args.lr,
         grad_accum=args.grad_accum, bf16=args.bf16, num_workers=args.num_workers,
         grad_checkpoint=args.grad_checkpoint, all_data=args.all_data,
+        seed=args.seed,
         remove_unused_columns=False,  # teacher_logits 컬럼 보존 (KDCollator 가 사용)
     )
     trainer = KDTrainer(
