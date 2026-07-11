@@ -26,6 +26,17 @@ else
   ( d 2 mega_trio qgptoss qw6 q7bteam qgemma9b:0.5 ) &
 fi
 wait
+# Wave2 (사용자 제안: 큰 Qwen도 포함) — 32B(최대)/14B 추가 변형
+if [ -n "$GLM" ]; then
+  ( d 0 mega_all q3bb q3b43 q3b44 q3b45 qgptoss qgpt5 qgemma9b qglm32b q14b q32b q7bteam ) &   # 말그대로 전부(11종)
+  ( d 1 mega_w32 qw6:4 qgptoss:1.5 qgpt5:1 q7bteam:1 q32b:1 qgemma9b:0.5 qglm32b:0.5 ) &        # 코어가중 + 32B
+  ( d 2 mega_trio32 qgptoss qw6 q7bteam q32b:0.5 qgemma9b:0.5 qglm32b:0.5 ) &                   # 트리오 + 32B/이질 경량
+else
+  ( d 0 mega_all q3bb q3b43 q3b44 q3b45 qgptoss qgpt5 qgemma9b q14b q32b q7bteam ) &
+  ( d 1 mega_w32 qw6:4 qgptoss:1.5 qgpt5:1 q7bteam:1 q32b:1 qgemma9b:0.5 ) &
+  ( d 2 mega_trio32 qgptoss qw6 q7bteam q32b:0.5 qgemma9b:0.5 ) &
+fi
+wait
 say "=== mega_blend 완료 (기준: qw6=0.7847, 트리오fold0은 kd_trio_f0 참조) ==="
-for n in mega_eq mega_w mega_trio; do
+for n in mega_eq mega_w mega_trio mega_all mega_w32 mega_trio32; do
   echo "  $n: $(grep -oE '"macro_f1": [0-9.]+' runs/kd_$n/metrics.json 2>/dev/null|grep -oE '[0-9.]+' || echo NA)"|tee -a "$LOG"; done
