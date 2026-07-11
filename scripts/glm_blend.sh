@@ -2,8 +2,8 @@
 set -uo pipefail; cd "$(dirname "$0")/.."; export HF_HOME=/data/hf
 LOG=runs/glm_blend.log; say(){ echo "[$(date '+%H:%M')] $*"|tee -a "$LOG"; }
 say "qglm32b store 대기..."
-until [ -f runs/_teacher_logits/qglm32b.npz ] || grep -qiE "qglm32b 실패" runs/gen_hetero.log 2>/dev/null; do sleep 120; done
-[ -f runs/_teacher_logits/qglm32b.npz ] || { say "GLM store 실패 — 중단"; exit 1; }
+until [ -f runs/_teacher_logits/qglm32b.npz ] || grep -qiE "qglm32b 재실패" runs/regen_glm.log 2>/dev/null; do sleep 120; done
+[ -f runs/_teacher_logits/qglm32b.npz ] || { say "GLM store 재실패 — 중단"; exit 1; }
 # gemma 블렌드 끝나 GPU1/2 비면 실행
 until ! screen -ls 2>/dev/null|grep -q "\.gemblend"; do sleep 60; done; sleep 10
 d(){ local g=$1 n=$2; shift 2; local o=runs/kd_$n; [ -f $o/metrics.json ] && return
