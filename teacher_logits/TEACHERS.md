@@ -13,11 +13,23 @@ run 의 `model/` 경로 대신 이 저장소 key 를 그대로 쓸 수 있다(�
 | qwen3b_base_f0__base | Qwen/Qwen2.5-3B | base | 0 | 0.76625 | 2026-07-10 | 3B base 3ep 레시피 수정판 |
 | qwen3b_cueshist_f0__cues_hist | Qwen/Qwen2.5-3B | cues_hist | 0 | 0.76474 | 2026-07-10 | teacher 1호기: 팀 3B 레시피 재현(fold0) |
 | qwen7b_base_f0__base | Qwen/Qwen2.5-7B | base | 0 | 0.77605 | 2026-07-10 | 7B base 2ep (OOF 0.77605, +bias 0.78081) |
+| qwen7b_ext3ep_f0__base | runs/qwen7b_base_f0/model | base | 0 | 0.75434 | 2026-07-11 | 7B s42 3ep 연장판 |
+| qwen7b_s43_f0__base | Qwen/Qwen2.5-7B | base | 0 | 0.76807 | 2026-07-11 | 7B base 2ep seed43 (블렌드 다양성) |
 | team_q14b | Qwen2.5-14B QLoRA ml640 (팀) | base | all-train | - | 2026-07-10 | val OOF 0.7651(LOG). train argmax 0.8347 | 70k argmax=0.8347 |
 | team_q32b | Qwen2.5-32B QLoRA ml640 (팀) | base | all-train | - | 2026-07-10 | train argmax 0.7928 | 70k argmax=0.7928 |
 | team_q3b | Qwen2.5-3B QLoRA ml640 (팀) | base | all-train | - | 2026-07-10 | val OOF 0.7639(LOG) | 70k argmax=0.8216 |
+| team_q3b43 | (팀) q3b43 | base | all-train | - | 2026-07-11 | fold0=0.7740 전체=0.8124 정직 |
+| team_q3b43_5 | (팀) q3b43_5 | base | all-train | - | 2026-07-11 | fold0=0.7717 전체=0.8128 정직 |
+| team_q3b44 | (팀) q3b44 | base | all-train | - | 2026-07-11 | fold0=0.7751 전체=0.8094 정직 |
+| team_q3b44_5 | (팀) q3b44_5 | base | all-train | - | 2026-07-11 | fold0=0.7723 전체=0.8094 정직 |
+| team_q3b45 | (팀) q3b45 | base | all-train | - | 2026-07-11 | fold0=0.7733 전체=0.8118 정직 |
+| team_q3b45_5 | (팀) q3b45_5 | base | all-train | - | 2026-07-11 | fold0=0.7713 전체=0.8121 정직 |
 | team_q3b_bl3 | q3b 라벨보정 blend λ0.3 (팀) | base | all-train | - | 2026-07-10 | correct_store | 70k argmax=0.9393 |
 | team_q3b_ka | q3b 라벨보정 ka λ0.3 (팀) | base | all-train | - | 2026-07-10 | correct_store | 70k argmax=0.9997 |
+| team_q3bb5 | (팀) q3bb5 | base | all-train | - | 2026-07-11 | fold0=0.7744 전체=0.8121 정직 |
+| team_qgemma9b | google/gemma-2-9b-it QLoRA (팀) | base | all-train | - | 2026-07-11 | fold0=0.7626 이질(non-Qwen) 1호 |
 | team_qgpt5 | Qwen3-4B GPT5증류 teacher (팀) | base | all-train | - | 2026-07-10 | val OOF 0.7741(LOG). w6 핵심 teacher | 70k argmax=0.8166 |
+| team_qgpt5_5 | (팀) qgpt5 5ep 재학습 | base | all-train | - | 2026-07-11 | fold0=0.7744 전체=0.8175 |
 | team_qgptoss | gpt-oss 증류 4B teacher (팀) | base | all-train | - | 2026-07-10 | train argmax 0.8227 | 70k argmax=0.8227 |
+| team_qgptoss5 | (팀) qgptoss5 | base | all-train | - | 2026-07-11 | fold0=0.7810 전체=0.8239 정직 |
 | team_qw6 | kd_w6_all teacher blend 캐시 (팀) | base | all-train | - | 2026-07-10 | LB 0.7874를 만든 최종 soft-target | 70k argmax=0.8213 |

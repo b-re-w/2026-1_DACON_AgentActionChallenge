@@ -118,5 +118,125 @@
     "n_rows": 70000,
     "saved_at": "2026-07-10T23:49:08",
     "note": "Coder-7B base 2ep (이종 백본)"
+  },
+  "team_qgptoss5": {
+    "backbone": "(팀) qgptoss5",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": null,
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-11T03:23:32",
+    "note": "fold0=0.7810 전체=0.8239 정직"
+  },
+  "team_q3b43": {
+    "backbone": "(팀) q3b43",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": null,
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-11T03:23:32",
+    "note": "fold0=0.7740 전체=0.8124 정직"
+  },
+  "team_q3b44": {
+    "backbone": "(팀) q3b44",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": null,
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-11T03:23:32",
+    "note": "fold0=0.7751 전체=0.8094 정직"
+  },
+  "team_q3b45": {
+    "backbone": "(팀) q3b45",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": null,
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-11T03:23:32",
+    "note": "fold0=0.7733 전체=0.8118 정직"
+  },
+  "team_q3bb5": {
+    "backbone": "(팀) q3bb5",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": null,
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-11T03:23:32",
+    "note": "fold0=0.7744 전체=0.8121 정직"
+  },
+  "team_q3b43_5": {
+    "backbone": "(팀) q3b43_5",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": null,
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-11T03:23:33",
+    "note": "fold0=0.7717 전체=0.8128 정직"
+  },
+  "team_q3b44_5": {
+    "backbone": "(팀) q3b44_5",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": null,
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-11T03:23:33",
+    "note": "fold0=0.7723 전체=0.8094 정직"
+  },
+  "team_q3b45_5": {
+    "backbone": "(팀) q3b45_5",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": null,
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-11T03:23:33",
+    "note": "fold0=0.7713 전체=0.8121 정직"
+  },
+  "team_qgpt5_5": {
+    "backbone": "(팀) qgpt5 5ep 재학습",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": null,
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-11T06:52:47",
+    "note": "fold0=0.7744 전체=0.8175"
+  },
+  "qwen7b_s43_f0__base": {
+    "backbone": "Qwen/Qwen2.5-7B",
+    "preset": "base",
+    "fold": "0",
+    "model_dir": "runs/qwen7b_s43_f0/model",
+    "oof_macro_f1": 0.7680669040807925,
+    "n_rows": 70000,
+    "saved_at": "2026-07-11T13:59:18",
+    "note": "7B base 2ep seed43 (블렌드 다양성)"
+  },
+  "team_qgemma9b": {
+    "backbone": "google/gemma-2-9b-it QLoRA (팀)",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": null,
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-11T16:24:15",
+    "note": "fold0=0.7626 이질(non-Qwen) 1호"
+  },
+  "qwen7b_ext3ep_f0__base": {
+    "backbone": "runs/qwen7b_base_f0/model",
+    "preset": "base",
+    "fold": "0",
+    "model_dir": "runs/qwen7b_ext3ep_f0/model",
+    "oof_macro_f1": 0.7543439341014515,
+    "n_rows": 70000,
+    "saved_at": "2026-07-11T22:13:59",
+    "note": "7B s42 3ep 연장판"
   }
 }

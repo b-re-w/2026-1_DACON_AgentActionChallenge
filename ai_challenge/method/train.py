@@ -60,6 +60,11 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--seed", type=int, default=42, help="앙상블 다양성용 시드")
     ap.add_argument("--optim", default="adamw_torch",
                     help="7B 급은 paged_adamw_8bit(bitsandbytes)로 옵티마이저 메모리 절약")
+    ap.add_argument("--qlora", action="store_true",
+                    help="4bit+LoRA 학습(20B+ 이질 teacher 용). 저장 시 merge 병합")
+    ap.add_argument("--lora", action="store_true",
+                    help="bf16+LoRA(양자화 없음) — mxfp4 네이티브 모델(gpt-oss)용")
+    ap.add_argument("--lora-r", type=int, default=16)
     ap.add_argument("--fp16", action="store_true", help="bf16 대신 fp16(구형 GPU)")
     ap.add_argument("--name", default=None, help="runs/<name>. 미지정 시 자동 생성")
     ap.add_argument("--out-root", default="runs")
@@ -84,7 +89,8 @@ def main() -> None:
     records = load_train_records()
     fold = None if args.all_data else get_folds(records)
     tok = build_tokenizer(args.model)
-    model = build_model(args.model, tok, grad_checkpoint=args.grad_checkpoint)
+    model = build_model(args.model, tok, grad_checkpoint=args.grad_checkpoint,
+                        qlora=args.qlora, lora=args.lora, lora_r=args.lora_r)
 
     train_ds, val_ds = build_datasets(
         records, fold, tok, args.max_length,
@@ -112,6 +118,9 @@ def main() -> None:
     )
     trainer.train()
 
+    # (Q)LoRA 는 어댑터를 본체에 병합해 일반 모델로 저장(predict_logits 호환)
+    if args.qlora or args.lora:
+        trainer.model = trainer.model.merge_and_unload()
     # 제출용 모델 저장 + infer_config 에 preset 기록(pack 이 추론 직렬화에 사용)
     model_dir = save_submission_model(trainer, tok, out_dir, args.max_length)
     icfg = json.loads((model_dir / "infer_config.json").read_text())

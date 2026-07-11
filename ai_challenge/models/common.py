@@ -54,13 +54,29 @@ def build_tokenizer(model_name: str):
     return tok
 
 
-def build_model(model_name: str, tokenizer, grad_checkpoint: bool = False):
-    """14-way seq-cls 모델 로드 (id2label 부여 → 저장 모델이 클래스명 self-describe)."""
+def build_model(model_name: str, tokenizer, grad_checkpoint: bool = False,
+                qlora: bool = False, lora: bool = False, lora_r: int = 16):
+    """14-way seq-cls 모델 로드 (id2label 부여 → 저장 모델이 클래스명 self-describe).
+
+    qlora=True: 4bit(nf4) + LoRA. lora=True: bf16 + LoRA(양자화 없음 — gpt-oss 처럼
+    네이티브 양자화(mxfp4) 모델은 bnb 와 충돌하므로 이 경로 사용).
+    둘 다 SEQ_CLS LoRA(all-linear, score 헤드 full). 학습 후 merge 병합 저장.
+    """
+    quant_kwargs = {}
+    if qlora:
+        from transformers import BitsAndBytesConfig
+        quant_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True, bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16, bnb_4bit_use_double_quant=True,
+        )
+    if qlora or lora:
+        quant_kwargs["torch_dtype"] = torch.bfloat16
     model = AutoModelForSequenceClassification.from_pretrained(
         model_name,
         num_labels=NUM_CLASSES,
         id2label={i: c for i, c in ID_TO_CLASS.items()},
         label2id=dict(CLASS_TO_ID),
+        **quant_kwargs,
     )
     model.resize_token_embeddings(len(tokenizer))
     if model.config.pad_token_id is None:
@@ -73,6 +89,19 @@ def build_model(model_name: str, tokenizer, grad_checkpoint: bool = False):
             sub.pad_token_id = model.config.pad_token_id
     if grad_checkpoint:
         model.config.use_cache = False
+    if qlora or lora:
+        from peft import LoraConfig, TaskType, get_peft_model
+        if qlora:
+            from peft import prepare_model_for_kbit_training
+            model = prepare_model_for_kbit_training(
+                model, use_gradient_checkpointing=grad_checkpoint)
+        elif grad_checkpoint:
+            model.enable_input_require_grads()  # grad-ckpt + frozen base 호환
+        lcfg = LoraConfig(task_type=TaskType.SEQ_CLS, r=lora_r, lora_alpha=lora_r * 2,
+                          lora_dropout=0.05, target_modules="all-linear",
+                          modules_to_save=["score"])
+        model = get_peft_model(model, lcfg)
+        model.print_trainable_parameters()
     return model
 
 
