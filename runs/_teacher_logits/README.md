@@ -67,9 +67,9 @@ uv run python -m ai_challenge.method.distill \
 - `qdebertaL2` 로 대체됨. **둘을 동시에 넣으면 오히려 손해**(+0.0003) — 서로 상관이 높아
   약한 구버전이 발목을 잡는다. **신버전만** 쓸 것.
 
-### `qmodernbertL` (OOF 0.5977) — 커밋 안 함
-- lr 2e-5 가 ModernBERT 에 너무 낮아 undertrain(ep5 까지 계속 상승 중이었음).
-- 현 상태로는 앙상블 기여 ~0. 재학습(lr 5e-5, ep8) 후 재평가 필요.
+### `qmodernbertL` / `qmodernbertL2` — **폐기 확정** (커밋 안 함)
+- 1차(lr2e-5) 0.5977 → 재학습(lr5e-5/ep8) 0.6464. lr 수정으로 +0.049 올랐으나
+  유효 기준 미달(gemma9b 0.7624 대비 −0.116). 이 태스크에서 encoder 는 DeBERTa 만 유효.
 
 ---
 
