@@ -27,7 +27,10 @@ run 의 `model/` 경로 대신 이 저장소 key 를 그대로 쓸 수 있다(�
 | team_q3b_bl3 | q3b 라벨보정 blend λ0.3 (팀) | base | all-train | - | 2026-07-10 | correct_store | 70k argmax=0.9393 |
 | team_q3b_ka | q3b 라벨보정 ka λ0.3 (팀) | base | all-train | - | 2026-07-10 | correct_store | 70k argmax=0.9997 |
 | team_q3bb5 | (팀) q3bb5 | base | all-train | - | 2026-07-11 | fold0=0.7744 전체=0.8121 정직 |
+| team_q7bteam | (팀) q7bteam | base | all-train | - | 2026-07-12 | fold0=0.7758 |
+| team_qdebertaL2 | (팀) qdebertaL2 | base | all-train | - | 2026-07-12 | fold0=0.7417 전체=0.7763 |
 | team_qgemma9b | google/gemma-2-9b-it QLoRA (팀) | base | all-train | - | 2026-07-11 | fold0=0.7626 이질(non-Qwen) 1호 |
+| team_qglm32b | (팀) qglm32b | base | all-train | - | 2026-07-12 | fold0=0.7605 전체=0.7778 |
 | team_qgpt5 | Qwen3-4B GPT5증류 teacher (팀) | base | all-train | - | 2026-07-10 | val OOF 0.7741(LOG). w6 핵심 teacher | 70k argmax=0.8166 |
 | team_qgpt5_5 | (팀) qgpt5 5ep 재학습 | base | all-train | - | 2026-07-11 | fold0=0.7744 전체=0.8175 |
 | team_qgptoss | gpt-oss 증류 4B teacher (팀) | base | all-train | - | 2026-07-10 | train argmax 0.8227 | 70k argmax=0.8227 |

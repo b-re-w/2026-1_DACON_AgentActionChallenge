@@ -65,6 +65,8 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--lora", action="store_true",
                     help="bf16+LoRA(양자화 없음) — mxfp4 네이티브 모델(gpt-oss)용")
     ap.add_argument("--lora-r", type=int, default=16)
+    ap.add_argument("--no-inloop-eval", action="store_true",
+                    help="에폭 eval/저장 끄기 (MoE 등 eval 배치 OOM 회피용 — OOF 는 종료 후 별도)")
     ap.add_argument("--fp16", action="store_true", help="bf16 대신 fp16(구형 GPU)")
     ap.add_argument("--name", default=None, help="runs/<name>. 미지정 시 자동 생성")
     ap.add_argument("--out-root", default="runs")
@@ -106,7 +108,7 @@ def main() -> None:
         warmup_ratio=args.warmup_ratio, weight_decay=args.weight_decay,
         bf16=not args.fp16, num_workers=args.num_workers,
         grad_checkpoint=args.grad_checkpoint, all_data=args.all_data, seed=args.seed,
-        optim=args.optim,
+        optim=args.optim, inloop_eval=not args.no_inloop_eval,
     )
 
     trainer = WeightedTrainer(
@@ -134,7 +136,7 @@ def main() -> None:
         "max_length": args.max_length, "class_weight": args.class_weight, "seed": args.seed,
     }
 
-    if val_ds is not None:
+    if val_ds is not None and not args.no_inloop_eval:
         pred = trainer.predict(val_ds)
         logits = np.asarray(pred.predictions, dtype=np.float32)
         preds = logits.argmax(-1)

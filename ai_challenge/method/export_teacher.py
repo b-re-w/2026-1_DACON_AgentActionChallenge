@@ -23,6 +23,8 @@ def main() -> None:
     ap.add_argument("--runs", nargs="+", required=True, help="run 디렉터리(내부에 model/ 필요)")
     ap.add_argument("--preset", default=None, help="직렬화 프리셋(기본: infer_config.serialize)")
     ap.add_argument("--max-length", type=int, default=512)
+    ap.add_argument("--batch-size", type=int, default=64,
+                    help="대형 MoE(gpt-oss) 는 8 권장 (추론 OOM 회피)")
     ap.add_argument("--note", default="", help="TEACHERS.md 비고")
     args = ap.parse_args()
 
@@ -35,7 +37,8 @@ def main() -> None:
             icfg = model_dir / "infer_config.json"
             preset = (json.loads(icfg.read_text()).get("serialize", "base")
                       if icfg.exists() else "base")
-        teacher_train_logits(model_dir, records, preset, max_length=args.max_length)
+        teacher_train_logits(model_dir, records, preset, max_length=args.max_length,
+                             batch_size=args.batch_size)
         if args.note:
             run_name = model_dir.parent.name if model_dir.name == "model" else model_dir.name
             update_entry(make_key(run_name, preset), note=args.note)

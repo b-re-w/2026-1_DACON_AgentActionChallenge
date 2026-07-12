@@ -238,5 +238,35 @@
     "n_rows": 70000,
     "saved_at": "2026-07-11T22:13:59",
     "note": "7B s42 3ep 연장판"
+  },
+  "team_q7bteam": {
+    "backbone": "(팀) q7bteam",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": null,
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-12T00:55:43",
+    "note": "fold0=0.7758"
+  },
+  "team_qglm32b": {
+    "backbone": "(팀) qglm32b",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": null,
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-12T15:54:27",
+    "note": "fold0=0.7605 전체=0.7778"
+  },
+  "team_qdebertaL2": {
+    "backbone": "(팀) qdebertaL2",
+    "preset": "base",
+    "fold": "all-train",
+    "model_dir": null,
+    "oof_macro_f1": null,
+    "n_rows": 70000,
+    "saved_at": "2026-07-12T15:54:27",
+    "note": "fold0=0.7417 전체=0.7763"
   }
 }

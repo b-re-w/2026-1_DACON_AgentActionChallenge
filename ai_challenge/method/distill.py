@@ -144,25 +144,33 @@ class KDTrainer(Trainer):
     """alpha*CE + (1-alpha)*T^2*KL(student/T || teacher_soft).
 
     eval 배치는 soft_targets 가 없으므로 plain CE 로 loss 계산(지표에만 사용).
+    class_weights(14,) 지정 시 샘플 손실을 정답 클래스 가중으로 재가중(macro-F1 정합).
     """
 
-    def __init__(self, *args, kd_alpha: float = 0.25, kd_T: float = 3.0, **kwargs):
+    def __init__(self, *args, kd_alpha: float = 0.25, kd_T: float = 3.0,
+                 class_weights: torch.Tensor | None = None, **kwargs):
         super().__init__(*args, **kwargs)
         self.kd_alpha = kd_alpha
         self.kd_T = kd_T
+        self.class_weights = class_weights
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         labels = inputs.pop("labels")
         soft = inputs.pop("soft_targets", None)
         outputs = model(**inputs)
         logits = outputs.logits.float()
-        ce = F.cross_entropy(logits, labels)
         if soft is None:  # eval 경로
-            loss = ce
+            loss = F.cross_entropy(logits, labels)
         else:
+            ce_i = F.cross_entropy(logits, labels, reduction="none")
             log_p = F.log_softmax(logits / self.kd_T, dim=-1)
-            kl = F.kl_div(log_p, soft.to(log_p.device), reduction="batchmean")
-            loss = self.kd_alpha * ce + (1.0 - self.kd_alpha) * (self.kd_T ** 2) * kl
+            kl_i = F.kl_div(log_p, soft.to(log_p.device), reduction="none").sum(-1)
+            li = self.kd_alpha * ce_i + (1.0 - self.kd_alpha) * (self.kd_T ** 2) * kl_i
+            if self.class_weights is not None:
+                w = self.class_weights.to(li.device)[labels]
+                loss = (li * w).sum() / w.sum()
+            else:
+                loss = li.mean()
         return (loss, outputs) if return_outputs else loss
 
 
@@ -189,6 +197,10 @@ def main() -> None:
     ap.add_argument("--kd-T", type=float, default=3.0)
     ap.add_argument("--eval-steps", type=int, default=500,
                     help="fold 런 스텝단위 검증 주기(베스트 체크포인트 선택). 0=에폭단위")
+    ap.add_argument("--target-bias", default=None,
+                    help="bias json 경로 — soft-target 확률에 bias 를 더해(클립·재정규화) 증류")
+    ap.add_argument("--class-weight", default=None, choices=[None, "balanced", "sqrt"],
+                    help="약클래스 가중 KD (샘플 손실을 정답 클래스 빈도 역수로 가중)")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--grad-checkpoint", action="store_true")
     ap.add_argument("--name", required=True)
@@ -212,6 +224,12 @@ def main() -> None:
             preset = json.loads(icfg.read_text()).get("serialize", "base") if icfg.exists() else "base"
         logit_list.append(teacher_train_logits(tdir, records, preset, args.max_length))
     soft = blend_teachers(logit_list, weights, args.kd_T)
+    if args.target_bias:
+        bvec = np.array(json.loads(Path(args.target_bias).read_text())["bias_vector"],
+                        dtype=np.float32)
+        soft = np.clip(soft + bvec[None, :], 1e-8, None)
+        soft = soft / soft.sum(axis=1, keepdims=True)
+        print(f"[target-bias] soft-target 에 bias 적용: {args.target_bias}")
 
     # teacher blend 자체의 train 정확도(상한 참고치)
     y_all = np.array([CLASS_TO_ID[s.action] for s in records])
@@ -249,12 +267,21 @@ def main() -> None:
         inloop_eval=not args.all_data,
         eval_steps=args.eval_steps or None,
     )
+    cw = None
+    if args.class_weight:
+        counts = np.bincount([CLASS_TO_ID[s.action] for s in train_samples], minlength=14)
+        w = counts.sum() / (14 * np.maximum(counts, 1))
+        if args.class_weight == "sqrt":
+            w = np.sqrt(w)
+        cw = torch.tensor(w / w.mean(), dtype=torch.float32)
+        print(f"[cw] {args.class_weight}: min={cw.min():.2f} max={cw.max():.2f}")
+
     trainer = KDTrainer(
         model=model, args=targs, train_dataset=train_ds,
         eval_dataset=val_ds,
         data_collator=KDCollator(tok),  # eval 배치(soft 없음)도 처리
         compute_metrics=compute_metrics if val_ds is not None else None,
-        kd_alpha=args.kd_alpha, kd_T=args.kd_T,
+        kd_alpha=args.kd_alpha, kd_T=args.kd_T, class_weights=cw,
     )
     trainer.train()
 
