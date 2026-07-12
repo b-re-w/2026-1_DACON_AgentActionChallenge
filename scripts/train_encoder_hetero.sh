@@ -25,10 +25,11 @@ case "${1:-}" in
     EXTRA="--batch-size 64 --lr 1.2e-5"   # grad-ckpt 로 memory 안전, batch64 로 step 절반
     TF="" ;;
   modernbert) # 395M, 최신 arch + RoPE + 8k context. transformers>=4.48 필요 → 오버레이.
-    MODEL=answerdotai/ModernBERT-large; TAG=qmodernbertL
-    ML=640                     # 8k native → 다른 teacher(640)와 맞춤(long-history 강점 유지)
-    EXTRA="--batch-size 48 --lr 2e-5"
-    TF="--with transformers==4.57.1" ;;
+    # lr5e-5: ModernBERT 는 higher-LR 설계 — lr2e-5(1차)는 0.598 undertrain 의 원인으로 확정.
+    MODEL=answerdotai/ModernBERT-large; TAG=qmodernbertL2
+    ML=640
+    EXTRA="--batch-size 48 --lr 5e-5 --epochs 8 --early-stop-patience 2"
+    TF="--extra dev --with transformers==4.57.1" ;;
   *) echo "사용법: $0 {deberta|modernbert}"; exit 1 ;;
 esac
 

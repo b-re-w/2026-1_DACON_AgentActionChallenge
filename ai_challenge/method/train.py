@@ -80,6 +80,9 @@ def main() -> None:
                     help="0=끔. >0 이면 매 epoch in-loop eval(macro_f1) 후 patience epoch "
                          "개선 없으면 조기중단 + best epoch 복원. --epochs 는 상한이 된다. "
                          "(in-loop eval 이 필요하므로 --manual-oof 를 무시하고 강제로 켬)")
+    ap.add_argument("--resume", action="store_true",
+                    help="out/hf 의 마지막 체크포인트에서 이어서 학습(없으면 처음부터). "
+                         "장시간 학습(대형 QLoRA teacher)이 중간에 죽어도 재실행만으로 복구된다.")
     args = ap.parse_args()
 
     # early stopping 은 매 epoch 검증 지표가 필요 → in-loop eval 강제(manual-oof 와 상호배타).
@@ -135,7 +138,14 @@ def main() -> None:
         compute_metrics=compute_metrics, class_weights=class_weights,
         callbacks=callbacks,
     )
-    trainer.train()
+    # 체크포인트는 epoch 마다 저장(save_strategy=epoch)되므로, 죽어도 --resume 로 이어받는다.
+    resume_ckpt = None
+    if args.resume:
+        from transformers.trainer_utils import get_last_checkpoint
+
+        resume_ckpt = get_last_checkpoint(str(out / "hf"))
+        print(f"[resume] {resume_ckpt or '체크포인트 없음 → 처음부터'}", flush=True)
+    trainer.train(resume_from_checkpoint=resume_ckpt)
     model_dir = save_submission_model(trainer, tok, out, args.max_length)
 
     if args.all_data:
