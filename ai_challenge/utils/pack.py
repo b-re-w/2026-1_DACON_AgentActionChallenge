@@ -338,6 +338,13 @@ def pack(model_dir, out=None, name=None, fp16: bool = True, serialize_mode="base
     icfg["serialize"] = serialize_mode
     icfg_path.write_text(json.dumps(icfg))
 
+    # bias.json 은 fp16/int4 재저장(save_pretrained) 시 복사되지 않으므로 명시 복사.
+    # (script.py 가 model/bias.json 을 읽어 (logits+bias).argmax — 56k best-ckpt+bias70k 표준)
+    bias_src = model_dir / "bias.json"
+    if bias_src.exists() and not (src_dir / "bias.json").exists():
+        shutil.copy(bias_src, src_dir / "bias.json")
+        print("[bias] bias.json 포함")
+
     skip = {"optimizer.pt", "scheduler.pt", "trainer_state.json", "training_args.bin", "rng_state.pth"}
     files = [p for p in sorted(src_dir.rglob("*")) if p.is_file() and p.name not in skip]
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
