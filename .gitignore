@@ -181,7 +181,14 @@ cython_debug/
 .pypirc
 
 # PyTorch
-runs/
+runs/*
+# 예외: 공유용 teacher soft-label store (명시한 파일만 — 메인서버 복사본 92MB 가 딸려가지 않도록
+#       와일드카드 대신 파일명을 하나씩 허용한다)
+!runs/_teacher_logits/
+runs/_teacher_logits/*
+!runs/_teacher_logits/README.md
+!runs/_teacher_logits/qdebertaL2.npz
+!runs/_teacher_logits/qdebertaL2.json
 data/
 .data/
 results/

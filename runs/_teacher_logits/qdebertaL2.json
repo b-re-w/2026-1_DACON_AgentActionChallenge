@@ -1,0 +1,7 @@
+{
+  "tag": "qdebertaL2",
+  "n": 70000,
+  "teacher_dir": "runs/t_qdebertaL2/model",
+  "serialize": "base",
+  "max_length": 512
+}
