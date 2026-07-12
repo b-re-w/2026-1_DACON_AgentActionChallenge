@@ -205,6 +205,7 @@ def build_training_args(
     inloop_eval: bool = True,
     seed: int = 42,
     optim: str = "adamw_torch",
+    eval_steps: int = 0,
     fsdp: str = "",
     fsdp_layer_cls: str = "Qwen2DecoderLayer",
 ) -> TrainingArguments:
@@ -213,6 +214,7 @@ def build_training_args(
     distill 은 데이터셋에 teacher_logits 컬럼을 실어 보내므로 remove_unused_columns=False
     로 호출해야 한다(기본 True 면 collator 전에 제거되어 KeyError).
     seed: 앙상블 다양성용. optim: 큰 모델은 "paged_adamw_8bit"(bitsandbytes)로 메모리 절약.
+    eval_steps>0 이면 step 단위 eval/save 로 macro-F1 피크 체크포인트 선택(56k best-ckpt 표준).
     """
     return TrainingArguments(
         remove_unused_columns=remove_unused_columns,
@@ -228,9 +230,10 @@ def build_training_args(
         weight_decay=weight_decay,
         bf16=bf16,
         fp16=not bf16,
-        eval_strategy="no" if (all_data or not inloop_eval) else "epoch",
-        save_strategy="no" if (all_data or not inloop_eval) else "epoch",
-        save_total_limit=1,
+        eval_strategy="no" if (all_data or not inloop_eval) else ("steps" if eval_steps else "epoch"),
+        save_strategy="no" if (all_data or not inloop_eval) else ("steps" if eval_steps else "epoch"),
+        **({"eval_steps": eval_steps, "save_steps": eval_steps} if eval_steps else {}),
+        save_total_limit=2 if eval_steps else 1,
         load_best_model_at_end=not (all_data or not inloop_eval),
         metric_for_best_model="macro_f1",
         greater_is_better=True,

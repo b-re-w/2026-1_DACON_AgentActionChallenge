@@ -163,6 +163,7 @@ def main() -> None:
     ap.add_argument("--dkd-alpha", type=float, default=1.0, help="TCKD(정답 이분) 가중")
     ap.add_argument("--dkd-beta", type=float, default=8.0, help="NCKD(비정답 분포) 가중 — DKD 핵심 레버")
     ap.add_argument("--seed", type=int, default=42, help="학습 시드 (model soup용 variance)")
+    ap.add_argument("--eval-steps", type=int, default=0, help="step 단위 eval/save로 best-ckpt 선택 (56k 표준)")
     ap.add_argument("--bf16", action="store_true")
     ap.add_argument("--num-workers", type=int, default=4)
     ap.add_argument("--grad-checkpoint", action="store_true")
@@ -264,6 +265,7 @@ def main() -> None:
         grad_accum=args.grad_accum, bf16=args.bf16, num_workers=args.num_workers,
         grad_checkpoint=args.grad_checkpoint, all_data=args.all_data,
         seed=args.seed,
+        eval_steps=args.eval_steps,
         remove_unused_columns=False,  # teacher_logits 컬럼 보존 (KDCollator 가 사용)
     )
     trainer = KDTrainer(
