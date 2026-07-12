@@ -32,8 +32,8 @@ d(){ local g=$1 n=$2; shift 2; local o=runs/kd_$n; [ -f $o/metrics.json ] && ret
   until gpu_free $g; do sleep 90; done
   say "GPU$g $n"; CUDA_VISIBLE_DEVICES=$g $D --teacher-logits "$@" --val-fold 0 --out $o >$o.log 2>&1
   say "$n OOF=$(grep -oE '"macro_f1": [0-9.]+' $o/metrics.json 2>/dev/null|grep -oE '[0-9.]+')"; }
-( d 0 tri72_swap qgptoss qw6 q72b ) &            # 7B → 72B 교체
-( d 1 tri72_add  qgptoss qw6 q7bteam q72b ) &    # 72B 추가 (7B 유지)
+( d 1 tri72_swap qgptoss qw6 q72b ) &            # 7B → 72B 교체
+( d 2 tri72_add  qgptoss qw6 q7bteam q72b ) &    # 72B 추가 (7B 유지)
 ( d 3 tri72_hv   qgptoss qw6 q72b:2 ) &          # 72B 무겁게
 wait
 say "=== chain_72b 완료 (기준 trio f0=0.78205) ==="
