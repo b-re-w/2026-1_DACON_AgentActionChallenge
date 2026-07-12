@@ -1,0 +1,7 @@
+{
+  "tag": "qgemma9b",
+  "n": 70000,
+  "teacher_dir": "runs/tgemma9b/model",
+  "serialize": "base",
+  "max_length": 640
+}

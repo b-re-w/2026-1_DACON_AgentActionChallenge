@@ -1,0 +1,8 @@
+{
+  "tag": "qglm32b",
+  "n": 70000,
+  "teacher_dir": "runs/tglm32b/model",
+  "serialize": "base",
+  "max_length": 640,
+  "dtype": "bf16-full"
+}

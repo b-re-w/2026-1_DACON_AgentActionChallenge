@@ -1,0 +1,6 @@
+{
+  "tag": "q7bteam",
+  "n": 70000,
+  "from": "main:teacher_logits/qwen7b_base_f0__base.npy",
+  "note": "\ud300 7B teacher (fold0\ud559\uc2b5, OOF 0.77605)"
+}
