@@ -143,11 +143,14 @@ def _format_history_turn(turn, text_limit):
 
 
 def serialize(sample, max_history_turns=12, prompt_limit=512, history_text_limit=160,
-              include_cues=False, open_files_names=0):
+              include_cues=False, open_files_names=0, include_trail=False):
     chunks = [f"{TOK_META} {_format_meta(sample, open_files_names=open_files_names)}",
               f"{TOK_LAST} {_last_action(sample.get('history', []) or []) or 'none'}"]
     if include_cues:
         chunks.append(f"{TOK_CUES} {_format_cues(sample)}")
+    if include_trail:
+        acts = [t.get("name", "?") for t in (sample.get("history") or []) if t.get("role") == "assistant_action"]
+        chunks.append("[TRAIL] " + (">".join(acts[-5:]) if acts else "none"))
     history = sample.get("history", []) or []
     if history:
         recent = history[-max_history_turns:]
@@ -183,6 +186,7 @@ def main():
         max_length = int(_cfg.get("max_length", 512))
         serialize_mode = _cfg.get("serialize", "base")
     include_cues = serialize_mode in ("cues", "cues_hist")
+    include_trail = serialize_mode == "btrail"
     open_files_names = 8 if serialize_mode in ("cues", "cues_hist", "paths", "rich") else 0
     batch_size = 64
 
@@ -213,7 +217,7 @@ def main():
     samples = load_jsonl(TEST_PATH)
     ids = [s.get("id", "") for s in samples]
     texts = [serialize(s, prompt_limit=max_length, include_cues=include_cues,
-                       open_files_names=open_files_names) for s in samples]
+                       open_files_names=open_files_names, include_trail=include_trail) for s in samples]
     print(f"samples={len(samples)} serialize={serialize_mode}")
 
     # 길이 정렬 배칭: 비슷한 길이끼리 묶어 동적 패딩 낭비를 줄인다(정확도 무영향, 속도 ↑).

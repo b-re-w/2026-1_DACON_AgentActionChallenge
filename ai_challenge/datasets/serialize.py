@@ -20,6 +20,7 @@ TOK_META = "[META]"
 TOK_LAST = "[LAST_ACTION]"
 TOK_HISTORY = "[HISTORY]"
 TOK_PROMPT = "[PROMPT]"
+TOK_TRAIL = "[TRAIL]"
 TOK_CUES = "[CUES]"
 
 # 탐색도구 4개(read_file/grep_search/list_directory/glob_pattern) 판별 전용 신호.
@@ -113,6 +114,8 @@ def serialize_sample(
     include_history: bool = True,
     include_last_action: bool = True,
     include_cues: bool = False,
+    include_trail: bool = False,
+    trail_k: int = 5,
 ) -> str:
     """샘플을 단일 문자열로 직렬화.
 
@@ -126,6 +129,10 @@ def serialize_sample(
 
     if include_last_action:
         chunks.append(f"{TOK_LAST} {sample.last_action or 'none'}")
+
+    if include_trail:
+        acts = [t.get("name", "?") for t in (sample.history or []) if t.get("role") == "assistant_action"]
+        chunks.append(f"{TOK_TRAIL} " + (">".join(acts[-trail_k:]) if acts else "none"))
 
     if include_cues:
         chunks.append(f"{TOK_CUES} {_format_cues(sample)}")
@@ -149,6 +156,7 @@ def serialize_sample(
 #   rich : paths + hist 결합
 SERIALIZE_PRESETS: dict[str, dict] = {
     "base": {},
+    "btrail": {"include_trail": True},
     "paths": {"open_files_names": 8},
     "hist": {"max_history_turns": 16, "history_text_limit": 280, "arg_value_limit": 80, "n_args": 8},
     "rich": {"open_files_names": 8, "max_history_turns": 16, "history_text_limit": 280,
