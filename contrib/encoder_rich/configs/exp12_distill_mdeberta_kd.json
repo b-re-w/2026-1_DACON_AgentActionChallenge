@@ -1,0 +1,13 @@
+{
+  "name": "exp12_distill_mdeberta_kd",
+  "model_name": "microsoft/mdeberta-v3-base",
+  "features": "rich",
+  "loss": "ce",
+  "epochs": 20,
+  "max_len": 512,
+  "batch_size": 16,
+  "teacher_soft": "experiments/teacher_soft.npy",
+  "kd_alpha": 0.5,
+  "save_model": true,
+  "use_wandb": false
+}

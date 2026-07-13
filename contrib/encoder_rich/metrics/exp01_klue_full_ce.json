@@ -1,0 +1,72 @@
+{
+  "name": "exp01_klue_full_ce",
+  "model_name": "klue/roberta-base",
+  "features": "full",
+  "loss": "ce",
+  "epochs": 20,
+  "max_len": 192,
+  "fold": 0,
+  "baseline": 0.4334,
+  "variants": {
+    "none": 0.6621,
+    "bias_tune": 0.6681,
+    "logit_adjust": 0.6621
+  },
+  "best_variant": "bias_tune",
+  "best_f1": 0.6681,
+  "per_class": {
+    "read_file": 0.516,
+    "grep_search": 0.564,
+    "list_directory": 0.453,
+    "glob_pattern": 0.548,
+    "edit_file": 0.843,
+    "write_file": 0.983,
+    "apply_patch": 0.676,
+    "run_bash": 0.744,
+    "run_tests": 0.703,
+    "lint_or_typecheck": 0.561,
+    "ask_user": 0.545,
+    "plan_task": 0.65,
+    "web_search": 0.567,
+    "respond_only": 1.0
+  },
+  "params": {
+    "bias": [
+      1.4901161415892261e-09,
+      1.4901161415892261e-09,
+      -0.15000000596046448,
+      -1.100000023841858,
+      0.15000000596046448,
+      -1.0,
+      0.0,
+      -0.25,
+      -0.15000000596046448,
+      0.0,
+      0.10000000149011612,
+      0.0,
+      0.0,
+      0.5
+    ],
+    "tau": 0.0
+  },
+  "elapsed_sec": 2351.5,
+  "config": {
+    "features": "full",
+    "loss": "ce",
+    "max_len": 192,
+    "batch_size": 32,
+    "epochs": 20,
+    "lr": 2e-05,
+    "fold": 0,
+    "n_folds": 5,
+    "seed": 42,
+    "n_limit": 0,
+    "patience": 3,
+    "lr_decay_epochs": 6,
+    "use_wandb": true,
+    "save_model": false,
+    "run_baseline": true,
+    "name": "exp01_klue_full_ce",
+    "model_name": "klue/roberta-base"
+  }
+}

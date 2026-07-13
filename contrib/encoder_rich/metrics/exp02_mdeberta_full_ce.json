@@ -1,0 +1,72 @@
+{
+  "name": "exp02_mdeberta_full_ce",
+  "model_name": "microsoft/mdeberta-v3-base",
+  "features": "full",
+  "loss": "ce",
+  "epochs": 20,
+  "max_len": 192,
+  "fold": 0,
+  "baseline": null,
+  "variants": {
+    "none": 0.685,
+    "bias_tune": 0.6937,
+    "logit_adjust": 0.685
+  },
+  "best_variant": "bias_tune",
+  "best_f1": 0.6937,
+  "per_class": {
+    "read_file": 0.523,
+    "grep_search": 0.593,
+    "list_directory": 0.455,
+    "glob_pattern": 0.624,
+    "edit_file": 0.89,
+    "write_file": 0.99,
+    "apply_patch": 0.736,
+    "run_bash": 0.767,
+    "run_tests": 0.686,
+    "lint_or_typecheck": 0.578,
+    "ask_user": 0.605,
+    "plan_task": 0.667,
+    "web_search": 0.597,
+    "respond_only": 1.0
+  },
+  "params": {
+    "bias": [
+      0.3499999940395355,
+      0.44999998807907104,
+      -0.4000000059604645,
+      -0.8500000238418579,
+      0.8500000238418579,
+      0.0,
+      -0.25,
+      0.15000000596046448,
+      0.10000000149011612,
+      -0.09999999403953552,
+      -0.5499999523162842,
+      -0.25,
+      -0.10000000149011612,
+      0.0
+    ],
+    "tau": 0.0
+  },
+  "elapsed_sec": 3291.5,
+  "config": {
+    "features": "full",
+    "loss": "ce",
+    "max_len": 192,
+    "batch_size": 32,
+    "epochs": 20,
+    "lr": 2e-05,
+    "fold": 0,
+    "n_folds": 5,
+    "seed": 42,
+    "n_limit": 0,
+    "patience": 3,
+    "lr_decay_epochs": 6,
+    "use_wandb": true,
+    "save_model": false,
+    "run_baseline": false,
+    "name": "exp02_mdeberta_full_ce",
+    "model_name": "microsoft/mdeberta-v3-base"
+  }
+}

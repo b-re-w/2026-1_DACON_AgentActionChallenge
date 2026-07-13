@@ -1,0 +1,9 @@
+{
+  "name": "exp05_klue_full_focal",
+  "model_name": "klue/roberta-base",
+  "features": "full",
+  "loss": "focal",
+  "epochs": 20,
+  "save_model": true,
+  "use_wandb": true
+}

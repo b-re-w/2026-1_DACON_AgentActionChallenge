@@ -1,0 +1,9 @@
+{
+  "name": "exp02_mdeberta_full_ce",
+  "model_name": "microsoft/mdeberta-v3-base",
+  "features": "full",
+  "loss": "ce",
+  "epochs": 20,
+  "save_model": false,
+  "use_wandb": true
+}

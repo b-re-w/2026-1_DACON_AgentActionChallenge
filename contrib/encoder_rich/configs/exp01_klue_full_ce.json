@@ -1,0 +1,10 @@
+{
+  "name": "exp01_klue_full_ce",
+  "model_name": "klue/roberta-base",
+  "features": "full",
+  "loss": "ce",
+  "epochs": 20,
+  "run_baseline": true,
+  "save_model": false,
+  "use_wandb": true
+}

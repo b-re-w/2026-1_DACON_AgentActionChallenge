@@ -1,0 +1,9 @@
+{
+  "name": "exp04_klue_promptonly_ce",
+  "model_name": "klue/roberta-base",
+  "features": "prompt_only",
+  "loss": "ce",
+  "epochs": 20,
+  "save_model": false,
+  "use_wandb": true
+}

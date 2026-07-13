@@ -1,0 +1,10 @@
+{
+  "name": "exp06_xlmr_full_ce_save",
+  "model_name": "FacebookAI/xlm-roberta-base",
+  "features": "full",
+  "loss": "ce",
+  "epochs": 20,
+  "run_baseline": false,
+  "save_model": true,
+  "use_wandb": true
+}

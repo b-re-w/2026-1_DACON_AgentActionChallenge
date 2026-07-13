@@ -1,0 +1,72 @@
+{
+  "name": "exp07_xlmr_rich512_ce",
+  "model_name": "FacebookAI/xlm-roberta-base",
+  "features": "rich",
+  "loss": "ce",
+  "epochs": 20,
+  "max_len": 512,
+  "fold": 0,
+  "baseline": null,
+  "variants": {
+    "none": 0.7421,
+    "bias_tune": 0.7496,
+    "logit_adjust": 0.7421
+  },
+  "best_variant": "bias_tune",
+  "best_f1": 0.7496,
+  "per_class": {
+    "read_file": 0.571,
+    "grep_search": 0.601,
+    "list_directory": 0.445,
+    "glob_pattern": 0.655,
+    "edit_file": 0.979,
+    "write_file": 0.986,
+    "apply_patch": 0.96,
+    "run_bash": 0.799,
+    "run_tests": 0.802,
+    "lint_or_typecheck": 0.703,
+    "ask_user": 0.635,
+    "plan_task": 0.665,
+    "web_search": 0.692,
+    "respond_only": 1.0
+  },
+  "params": {
+    "bias": [
+      0.10000000149011612,
+      -0.10000000149011612,
+      0.0,
+      -0.5,
+      1.5,
+      -0.75,
+      -0.5,
+      -0.6000000238418579,
+      0.10000000149011612,
+      0.0,
+      0.6000000238418579,
+      -0.25,
+      -0.25,
+      0.0
+    ],
+    "tau": 0.0
+  },
+  "elapsed_sec": 9587.4,
+  "config": {
+    "features": "rich",
+    "loss": "ce",
+    "max_len": 512,
+    "batch_size": 16,
+    "epochs": 20,
+    "lr": 2e-05,
+    "fold": 0,
+    "n_folds": 5,
+    "seed": 42,
+    "n_limit": 0,
+    "patience": 3,
+    "lr_decay_epochs": 6,
+    "use_wandb": true,
+    "save_model": true,
+    "run_baseline": false,
+    "name": "exp07_xlmr_rich512_ce",
+    "model_name": "FacebookAI/xlm-roberta-base"
+  }
+}

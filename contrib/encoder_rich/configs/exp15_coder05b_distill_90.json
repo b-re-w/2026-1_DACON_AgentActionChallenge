@@ -1,0 +1,15 @@
+{
+  "name": "exp15_coder05b_distill_90",
+  "model_name": "Qwen/Qwen2.5-Coder-0.5B",
+  "features": "rich",
+  "loss": "ce",
+  "epochs": 20,
+  "max_len": 512,
+  "batch_size": 8,
+  "lr": 2e-05,
+  "n_folds": 10,
+  "teacher_soft": "experiments/teacher_soft.npy",
+  "kd_alpha": 0.5,
+  "save_model": true,
+  "use_wandb": false
+}

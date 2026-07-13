@@ -1,0 +1,7 @@
+{
+  "name": "_qlora_smoke",
+  "model_name": "Qwen/Qwen2.5-Coder-7B",
+  "features": "rich", "max_len": 512,
+  "batch_size": 8, "grad_accum": 2, "epochs": 1, "n_limit": 1600,
+  "lr": 1e-4, "lora_r": 16, "lora_alpha": 32
+}

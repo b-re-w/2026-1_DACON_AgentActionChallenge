@@ -1,0 +1,7 @@
+{
+  "name": "abl_xlmr_rich_nometa",
+  "model_name": "FacebookAI/xlm-roberta-base",
+  "features": "rich_nometa", "loss": "ce",
+  "epochs": 20, "max_len": 512, "batch_size": 16,
+  "save_model": false, "use_wandb": false
+}

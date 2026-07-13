@@ -1,0 +1,7 @@
+{
+  "name": "exp09_klue_rich512_ce",
+  "model_name": "klue/roberta-base",
+  "features": "rich", "loss": "ce",
+  "epochs": 20, "max_len": 512, "batch_size": 16,
+  "save_model": true, "use_wandb": true
+}

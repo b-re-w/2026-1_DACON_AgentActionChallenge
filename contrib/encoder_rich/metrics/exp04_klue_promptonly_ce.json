@@ -1,0 +1,72 @@
+{
+  "name": "exp04_klue_promptonly_ce",
+  "model_name": "klue/roberta-base",
+  "features": "prompt_only",
+  "loss": "ce",
+  "epochs": 20,
+  "max_len": 192,
+  "fold": 0,
+  "baseline": null,
+  "variants": {
+    "none": 0.4401,
+    "bias_tune": 0.4484,
+    "logit_adjust": 0.4401
+  },
+  "best_variant": "bias_tune",
+  "best_f1": 0.4484,
+  "per_class": {
+    "read_file": 0.41,
+    "grep_search": 0.38,
+    "list_directory": 0.125,
+    "glob_pattern": 0.08,
+    "edit_file": 0.694,
+    "write_file": 0.983,
+    "apply_patch": 0.33,
+    "run_bash": 0.459,
+    "run_tests": 0.401,
+    "lint_or_typecheck": 0.257,
+    "ask_user": 0.45,
+    "plan_task": 0.473,
+    "web_search": 0.236,
+    "respond_only": 1.0
+  },
+  "params": {
+    "bias": [
+      -0.10000000149011612,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.10000000149011612,
+      0.10000000149011612,
+      -0.10000000149011612,
+      0.0,
+      0.0,
+      -0.25,
+      0.0
+    ],
+    "tau": 0.0
+  },
+  "elapsed_sec": 1516.6,
+  "config": {
+    "features": "prompt_only",
+    "loss": "ce",
+    "max_len": 192,
+    "batch_size": 32,
+    "epochs": 20,
+    "lr": 2e-05,
+    "fold": 0,
+    "n_folds": 5,
+    "seed": 42,
+    "n_limit": 0,
+    "patience": 3,
+    "lr_decay_epochs": 6,
+    "use_wandb": true,
+    "save_model": false,
+    "run_baseline": false,
+    "name": "exp04_klue_promptonly_ce",
+    "model_name": "klue/roberta-base"
+  }
+}
