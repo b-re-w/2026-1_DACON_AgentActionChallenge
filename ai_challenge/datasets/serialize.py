@@ -120,6 +120,7 @@ def serialize_sample(
     trail_compress: bool = False,
     include_nopen: bool = False,
     include_lastres: bool = False,
+    meta_lean: bool = False,
 ) -> str:
     """샘플을 단일 문자열로 직렬화.
 
@@ -129,7 +130,10 @@ def serialize_sample(
     chunks: list[str] = []
 
     if include_meta:
-        chunks.append(f"{TOK_META} {_format_meta(sample, open_files_names=open_files_names)}")
+        _m = _format_meta(sample, open_files_names=open_files_names)
+        if meta_lean:
+            _m = " ".join(p for p in _m.split() if not p.startswith(("tier=", "lang=", "budget=", "loc=", "codemix=")))
+        chunks.append(f"{TOK_META} {_m}")
 
     if include_last_action:
         chunks.append(f"{TOK_LAST} {sample.last_action or 'none'}")
@@ -194,6 +198,7 @@ SERIALIZE_PRESETS: dict[str, dict] = {
     "btrailf": {"include_trail": True, "trail_fail": True},
     "btrailn": {"include_trail": True, "include_nopen": True},
     "btrailr": {"include_trail": True, "include_lastres": True},
+    "btrim": {"include_trail": True, "meta_lean": True},
     "btrailc": {"include_trail": True, "trail_k": 8, "trail_compress": True},
     "btrail8": {"include_trail": True, "trail_k": 8},
     "bthist": {"include_trail": True, "max_history_turns": 16, "history_text_limit": 280},

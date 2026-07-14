@@ -143,8 +143,11 @@ def _format_history_turn(turn, text_limit):
 
 
 def serialize(sample, max_history_turns=12, prompt_limit=512, history_text_limit=160,
-              include_cues=False, open_files_names=0, include_trail=False, trail_k=5, trail_fail=False, include_nopen=False, include_lastres=False):
-    chunks = [f"{TOK_META} {_format_meta(sample, open_files_names=open_files_names)}",
+              include_cues=False, open_files_names=0, include_trail=False, trail_k=5, trail_fail=False, include_nopen=False, include_lastres=False, meta_lean=False):
+    _m = _format_meta(sample, open_files_names=open_files_names)
+    if meta_lean:
+        _m = " ".join(p for p in _m.split() if not p.startswith(("tier=", "lang=", "budget=", "loc=", "codemix=")))
+    chunks = [f"{TOK_META} {_m}",
               f"{TOK_LAST} {_last_action(sample.get('history', []) or []) or 'none'}"]
     if include_cues:
         chunks.append(f"{TOK_CUES} {_format_cues(sample)}")
@@ -205,11 +208,12 @@ def main():
         max_length = int(_cfg.get("max_length", 512))
         serialize_mode = _cfg.get("serialize", "base")
     include_cues = serialize_mode in ("cues", "cues_hist")
-    include_trail = serialize_mode in ("btrail", "btrail3", "btrail8", "bthist", "btrailf", "btrailn", "btrailr")
+    include_trail = serialize_mode in ("btrail", "btrail3", "btrail8", "bthist", "btrailf", "btrailn", "btrailr", "btrim")
     trail_k = {"btrail8": 8, "btrail3": 3}.get(serialize_mode, 5)
     trail_fail = serialize_mode == "btrailf"
     inc_nopen = serialize_mode == "btrailn"
     inc_lastres = serialize_mode == "btrailr"
+    meta_lean = serialize_mode == "btrim"
     hist_turns = 16 if serialize_mode == "bthist" else 12
     hist_lim = 280 if serialize_mode == "bthist" else 160
     open_files_names = 8 if serialize_mode in ("cues", "cues_hist", "paths", "rich") else 0
@@ -242,7 +246,7 @@ def main():
     samples = load_jsonl(TEST_PATH)
     ids = [s.get("id", "") for s in samples]
     texts = [serialize(s, prompt_limit=max_length, include_cues=include_cues,
-                       open_files_names=open_files_names, include_trail=include_trail, trail_k=trail_k, trail_fail=trail_fail, include_nopen=inc_nopen, include_lastres=inc_lastres,
+                       open_files_names=open_files_names, include_trail=include_trail, trail_k=trail_k, trail_fail=trail_fail, include_nopen=inc_nopen, include_lastres=inc_lastres, meta_lean=meta_lean,
                        max_history_turns=hist_turns, history_text_limit=hist_lim) for s in samples]
     print(f"samples={len(samples)} serialize={serialize_mode}")
 
