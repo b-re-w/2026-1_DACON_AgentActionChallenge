@@ -41,3 +41,8 @@
 ## 판단 원칙
 - fold0 단독 ✗ → **2~3 fold 평균**으로 승격 판단
 - 제출은 슬롯 아끼며 사용자 결정. LB만이 최종 심판 (OOF↑↛LB↑ 사례: oss2g1 OOF 0.7878→LB 0.7895 < qw6 0.7905)
+
+## [07-14 갱신] 표준 파이프라인 v2
+- **직렬화 = btrail** ([TRAIL] 직전5행동, LB +0.0010 실증) / **bias = bagged**(5-LOFO 평균, LB +0.0002 실증).
+- **로컬 판정 = fold2 주지표** (LB Spearman 1.0; f0/f3 무상관 — fold0 단독 판정 금지).
+- 현 팀 최고: btb70v2 = 트리오 KD + btrail + all-data + bagged bias = **LB 0.79489**.
