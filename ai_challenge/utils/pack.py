@@ -143,13 +143,20 @@ def _format_history_turn(turn, text_limit):
 
 
 def serialize(sample, max_history_turns=12, prompt_limit=512, history_text_limit=160,
-              include_cues=False, open_files_names=0, include_trail=False, trail_k=5):
+              include_cues=False, open_files_names=0, include_trail=False, trail_k=5, trail_fail=False):
     chunks = [f"{TOK_META} {_format_meta(sample, open_files_names=open_files_names)}",
               f"{TOK_LAST} {_last_action(sample.get('history', []) or []) or 'none'}"]
     if include_cues:
         chunks.append(f"{TOK_CUES} {_format_cues(sample)}")
     if include_trail:
-        acts = [t.get("name", "?") for t in (sample.get("history") or []) if t.get("role") == "assistant_action"]
+        _FAIL = re.compile(r"fail|error|denied|not found|exception|실패", re.I)
+        acts = []
+        for t in (sample.get("history") or []):
+            if t.get("role") == "assistant_action":
+                nm = t.get("name", "?")
+                if trail_fail and _FAIL.search(str(t.get("result_summary", ""))):
+                    nm += "!"
+                acts.append(nm)
         chunks.append("[TRAIL] " + (">".join(acts[-trail_k:]) if acts else "none"))
     history = sample.get("history", []) or []
     if history:
@@ -186,8 +193,9 @@ def main():
         max_length = int(_cfg.get("max_length", 512))
         serialize_mode = _cfg.get("serialize", "base")
     include_cues = serialize_mode in ("cues", "cues_hist")
-    include_trail = serialize_mode in ("btrail", "btrail3", "btrail8", "bthist")
+    include_trail = serialize_mode in ("btrail", "btrail3", "btrail8", "bthist", "btrailf")
     trail_k = {"btrail8": 8, "btrail3": 3}.get(serialize_mode, 5)
+    trail_fail = serialize_mode == "btrailf"
     hist_turns = 16 if serialize_mode == "bthist" else 12
     hist_lim = 280 if serialize_mode == "bthist" else 160
     open_files_names = 8 if serialize_mode in ("cues", "cues_hist", "paths", "rich") else 0
@@ -220,7 +228,7 @@ def main():
     samples = load_jsonl(TEST_PATH)
     ids = [s.get("id", "") for s in samples]
     texts = [serialize(s, prompt_limit=max_length, include_cues=include_cues,
-                       open_files_names=open_files_names, include_trail=include_trail, trail_k=trail_k,
+                       open_files_names=open_files_names, include_trail=include_trail, trail_k=trail_k, trail_fail=trail_fail,
                        max_history_turns=hist_turns, history_text_limit=hist_lim) for s in samples]
     print(f"samples={len(samples)} serialize={serialize_mode}")
 

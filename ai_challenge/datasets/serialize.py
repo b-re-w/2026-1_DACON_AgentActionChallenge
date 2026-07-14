@@ -116,6 +116,7 @@ def serialize_sample(
     include_cues: bool = False,
     include_trail: bool = False,
     trail_k: int = 5,
+    trail_fail: bool = False,
 ) -> str:
     """샘플을 단일 문자열로 직렬화.
 
@@ -131,7 +132,15 @@ def serialize_sample(
         chunks.append(f"{TOK_LAST} {sample.last_action or 'none'}")
 
     if include_trail:
-        acts = [t.get("name", "?") for t in (sample.history or []) if t.get("role") == "assistant_action"]
+        import re as _re
+        _FAIL = _re.compile(r"fail|error|denied|not found|exception|실패", _re.I)
+        acts = []
+        for t in (sample.history or []):
+            if t.get("role") == "assistant_action":
+                nm = t.get("name", "?")
+                if trail_fail and _FAIL.search(str(t.get("result_summary", ""))):
+                    nm += "!"
+                acts.append(nm)
         chunks.append(f"{TOK_TRAIL} " + (">".join(acts[-trail_k:]) if acts else "none"))
 
     if include_cues:
@@ -158,6 +167,7 @@ SERIALIZE_PRESETS: dict[str, dict] = {
     "base": {},
     "btrail": {"include_trail": True},
     "btrail3": {"include_trail": True, "trail_k": 3},
+    "btrailf": {"include_trail": True, "trail_fail": True},
     "btrail8": {"include_trail": True, "trail_k": 8},
     "bthist": {"include_trail": True, "max_history_turns": 16, "history_text_limit": 280},
     "paths": {"open_files_names": 8},
