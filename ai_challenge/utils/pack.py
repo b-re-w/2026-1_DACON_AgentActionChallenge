@@ -186,8 +186,8 @@ def main():
         max_length = int(_cfg.get("max_length", 512))
         serialize_mode = _cfg.get("serialize", "base")
     include_cues = serialize_mode in ("cues", "cues_hist")
-    include_trail = serialize_mode in ("btrail", "btrail8", "bthist")
-    trail_k = 8 if serialize_mode == "btrail8" else 5
+    include_trail = serialize_mode in ("btrail", "btrail3", "btrail8", "bthist")
+    trail_k = {"btrail8": 8, "btrail3": 3}.get(serialize_mode, 5)
     hist_turns = 16 if serialize_mode == "bthist" else 12
     hist_lim = 280 if serialize_mode == "bthist" else 160
     open_files_names = 8 if serialize_mode in ("cues", "cues_hist", "paths", "rich") else 0

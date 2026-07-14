@@ -157,6 +157,7 @@ def serialize_sample(
 SERIALIZE_PRESETS: dict[str, dict] = {
     "base": {},
     "btrail": {"include_trail": True},
+    "btrail3": {"include_trail": True, "trail_k": 3},
     "btrail8": {"include_trail": True, "trail_k": 8},
     "bthist": {"include_trail": True, "max_history_turns": 16, "history_text_limit": 280},
     "paths": {"open_files_names": 8},
