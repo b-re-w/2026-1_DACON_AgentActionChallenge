@@ -117,6 +117,7 @@ def serialize_sample(
     include_trail: bool = False,
     trail_k: int = 5,
     trail_fail: bool = False,
+    trail_compress: bool = False,
 ) -> str:
     """샘플을 단일 문자열로 직렬화.
 
@@ -141,7 +142,14 @@ def serialize_sample(
                 if trail_fail and _FAIL.search(str(t.get("result_summary", ""))):
                     nm += "!"
                 acts.append(nm)
-        chunks.append(f"{TOK_TRAIL} " + (">".join(acts[-trail_k:]) if acts else "none"))
+        seq = acts[-trail_k:]
+        if trail_compress and seq:
+            comp = []
+            for a in seq:
+                if comp and comp[-1][0] == a: comp[-1][1] += 1
+                else: comp.append([a, 1])
+            seq = [f"{a}*{c}" if c > 1 else a for a, c in comp]
+        chunks.append(f"{TOK_TRAIL} " + (">".join(seq) if seq else "none"))
 
     if include_cues:
         chunks.append(f"{TOK_CUES} {_format_cues(sample)}")
@@ -168,6 +176,7 @@ SERIALIZE_PRESETS: dict[str, dict] = {
     "btrail": {"include_trail": True},
     "btrail3": {"include_trail": True, "trail_k": 3},
     "btrailf": {"include_trail": True, "trail_fail": True},
+    "btrailc": {"include_trail": True, "trail_k": 8, "trail_compress": True},
     "btrail8": {"include_trail": True, "trail_k": 8},
     "bthist": {"include_trail": True, "max_history_turns": 16, "history_text_limit": 280},
     "paths": {"open_files_names": 8},
