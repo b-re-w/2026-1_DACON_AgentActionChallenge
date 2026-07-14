@@ -119,6 +119,7 @@ def serialize_sample(
     trail_fail: bool = False,
     trail_compress: bool = False,
     include_nopen: bool = False,
+    include_lastres: bool = False,
 ) -> str:
     """샘플을 단일 문자열로 직렬화.
 
@@ -151,6 +152,17 @@ def serialize_sample(
                 else: comp.append([a, 1])
             seq = [f"{a}*{c}" if c > 1 else a for a, c in comp]
         chunks.append(f"{TOK_TRAIL} " + (">".join(seq) if seq else "none"))
+    if include_lastres:
+        import re as _re2
+        _F = _re2.compile(r"fail|error|denied|not found|exception|실패", _re2.I)
+        _A = [t for t in (sample.history or []) if t.get("role") == "assistant_action"]
+        if _A:
+            _rs = str(_A[-1].get("result_summary", ""))
+            _b = "fail" if _F.search(_rs) else ("empty" if not _rs.strip() else ("num" if _re2.search(r"\d", _rs) else "ok"))
+        else:
+            _b = "none"
+        chunks.append(f"[LASTRES] {_b}")
+
     if include_nopen:
         _ws = (sample.session_meta or {}).get("workspace", {}) or {}
         chunks.append(f"[NOPEN] {len(_ws.get('open_files') or [])}")
@@ -181,6 +193,7 @@ SERIALIZE_PRESETS: dict[str, dict] = {
     "btrail3": {"include_trail": True, "trail_k": 3},
     "btrailf": {"include_trail": True, "trail_fail": True},
     "btrailn": {"include_trail": True, "include_nopen": True},
+    "btrailr": {"include_trail": True, "include_lastres": True},
     "btrailc": {"include_trail": True, "trail_k": 8, "trail_compress": True},
     "btrail8": {"include_trail": True, "trail_k": 8},
     "bthist": {"include_trail": True, "max_history_turns": 16, "history_text_limit": 280},
